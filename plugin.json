@@ -1,0 +1,38 @@
+{
+  "name": "siyuan-link-explorer",
+  "author": "Fly1018",
+  "url": "https://github.com/Fly1018/siyuan-link-explorer",
+  "version": "0.2.0",
+  "minAppVersion": "3.8.0",
+  "backends": [
+    "all"
+  ],
+  "frontends": [
+    "desktop",
+    "desktop-window",
+    "browser-desktop"
+  ],
+  "displayName": {
+    "default": "Link Explorer",
+    "zh_CN": "链接浏览器",
+    "en_US": "Link Explorer"
+  },
+  "description": {
+    "default": "List outgoing links and backlinks for the current document, with click-to-open navigation.",
+    "zh_CN": "列出当前文档的出链和反向链接，点击即可跳转到对应块。",
+    "en_US": "List outgoing links and backlinks for the current document, with click-to-open navigation."
+  },
+  "readme": {
+    "default": "README.md",
+    "zh_CN": "README.zh-CN.md",
+    "en_US": "README.md"
+  },
+  "keywords": [
+    "link",
+    "backlink",
+    "outgoing",
+    "bidirectional",
+    "出链",
+    "反向链接"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "name": "siyuan-link-explorer",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "List outgoing links and backlinks for the current SiYuan document.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fly1018/siyuan-link-explorer.git"
+  },
+  "homepage": "https://github.com/Fly1018/siyuan-link-explorer",
+  "bugs": {
+    "url": "https://github.com/Fly1018/siyuan-link-explorer/issues"
+  },
+  "author": "Fly1018",
+  "license": "MIT",
+  "packageManager": "pnpm@11.4.0",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "node ./scripts/clean.js && vite build",
+    "check": "tsc --noEmit -p tsconfig.json && svelte-check --tsconfig ./tsconfig.json"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^26.4.0",
+    "sass": "^1.103.1",
+    "siyuan": "1.2.5",
+    "svelte": "^5.57.0",
+    "svelte-check": "^4.7.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.2.2",
+    "vite-plugin-static-copy": "^4.1.1"
+  }
+}

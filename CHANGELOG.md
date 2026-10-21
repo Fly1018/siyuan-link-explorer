@@ -4,6 +4,14 @@
 
 升级方式：在「集市 → 已下载 → 插件」里点击更新即可，已有设置会自动保留。
 
+## 0.3.3 · 2026-10-21
+
+> Fix package.zip packaging for the marketplace validator.
+
+### 修复
+
+- **集市包校验失败**：Windows 下打包 `package.zip` 时，`i18n` 子目录条目被写成了反斜杠路径（如 `i18n\en.json`），不符合 ZIP 规范，导致「新增插件仓库」校验不通过。现在改用项目自带的打包脚本，始终生成正斜杠路径；`pnpm build` 会自动产出合规的 `package.zip`。
+
 ## 0.3.2 · 2026-10-21
 
 > Faster link loading and a set of correctness fixes.

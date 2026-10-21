@@ -1,6 +1,6 @@
 {
   "name": "siyuan-link-explorer",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "type": "module",
   "description": "See every link around the current SiYuan document: outgoing links, backlinks, mentions, external links, assets, and dead links.",
@@ -20,7 +20,8 @@
   },
   "scripts": {
     "dev": "vite build --watch",
-    "build": "node ./scripts/clean.js && vite build",
+    "build": "node ./scripts/clean.js && vite build && node ./scripts/package.js",
+    "package": "node ./scripts/package.js",
     "check": "tsc --noEmit -p tsconfig.json && svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {

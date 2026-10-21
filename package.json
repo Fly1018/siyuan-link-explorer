@@ -1,6 +1,6 @@
 {
   "name": "siyuan-link-explorer",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "List outgoing links and backlinks for the current SiYuan document.",

@@ -439,7 +439,7 @@ export default class LinkExplorer extends Plugin {
 
     private refsStmt(rootID: string, blockID: string, mode: "outgoing" | "backlinks" | "dead", max: number): string {
         const where = mode === "outgoing"
-            ? (blockID ? `r.block_id = '${blockID}'` : `r.root_id = '${rootID}'`)
+            ? (blockID ? `r.block_id = '${blockID}' AND tb.id IS NOT NULL` : `r.root_id = '${rootID}' AND tb.id IS NOT NULL`)
             : mode === "backlinks"
                 ? (blockID
                     ? `r.def_block_id = '${blockID}' AND tb.id IS NOT NULL`

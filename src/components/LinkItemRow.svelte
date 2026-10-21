@@ -42,6 +42,11 @@
     );
 
     function onKeyDown(event: KeyboardEvent) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            onOpen(item);
+            return;
+        }
         if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
         event.preventDefault();
         const items = Array.from(document.querySelectorAll<HTMLElement>(".le-panel .le-item"));

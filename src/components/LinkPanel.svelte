@@ -78,13 +78,14 @@
     const stats = $derived([
         { key: "outgoing", label: labels.outgoing, count: filteredOutgoing.length },
         { key: "backlinks", label: labels.backlinks, count: filteredBacklinks.length },
-        { key: "mentions", label: labels.mentions, count: linkState.mentions.length, show: linkSettings.showMentions && linkSettings.scope === "doc" },
+        { key: "mentions", label: labels.mentions, count: filteredMentions.length, show: linkSettings.showMentions && linkSettings.scope === "doc" },
         { key: "external", label: labels.externalLinks, count: filteredExternal.length, show: linkSettings.showExternal },
         { key: "assets", label: labels.assets, count: filteredAssets.length, show: linkSettings.showAssets },
         { key: "dead", label: labels.deadLinks, count: filteredDead.length, show: linkSettings.showDead },
     ].filter((item: any) => item.show !== false));
 
     const isolated = $derived(
+        linkSettings.scope === "doc" &&
         Boolean(linkState.docID) &&
         linkState.outgoing.length === 0 &&
         linkState.backlinks.length === 0 &&

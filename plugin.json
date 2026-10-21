@@ -2,7 +2,7 @@
   "name": "siyuan-link-explorer",
   "author": "Fly1018",
   "url": "https://github.com/Fly1018/siyuan-link-explorer",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "minAppVersion": "3.8.0",
   "backends": [
     "all"
@@ -13,14 +13,14 @@
     "browser-desktop"
   ],
   "displayName": {
-    "default": "Link Explorer",
-    "zh_CN": "链接浏览器",
-    "en_US": "Link Explorer"
+    "default": "Link Panorama",
+    "zh_CN": "链接全景",
+    "en_US": "Link Panorama"
   },
   "description": {
-    "default": "List outgoing links and backlinks for the current document, with click-to-open navigation.",
-    "zh_CN": "列出当前文档的出链和反向链接，点击即可跳转到对应块。",
-    "en_US": "List outgoing links and backlinks for the current document, with click-to-open navigation."
+    "default": "See every link around the current document: outgoing links, backlinks, mentions, external links, assets, and dead links, all clickable.",
+    "zh_CN": "一眼看清当前文档的全部链接：出链、反链、提及、外部链接、资源引用与失效链接，点击即可跳转。",
+    "en_US": "See every link around the current document: outgoing links, backlinks, mentions, external links, assets, and dead links, all clickable."
   },
   "readme": {
     "default": "README.md",
@@ -32,7 +32,11 @@
     "backlink",
     "outgoing",
     "bidirectional",
+    "mentions",
+    "dead link",
+    "链接",
     "出链",
-    "反向链接"
+    "反向链接",
+    "链接全景"
   ]
 }

@@ -1,9 +1,9 @@
 {
   "name": "siyuan-link-explorer",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "List outgoing links and backlinks for the current SiYuan document.",
+  "description": "See every link around the current SiYuan document: outgoing links, backlinks, mentions, external links, assets, and dead links.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Fly1018/siyuan-link-explorer.git"

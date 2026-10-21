@@ -1,5 +1,5 @@
 {
-  "dockTitle": "链接浏览器",
+  "dockTitle": "链接全景",
   "refresh": "刷新",
   "settings": "设置",
   "loading": "正在读取链接…",
@@ -43,7 +43,7 @@
   "mentionContext": "正文提及",
   "internalLink": "内部链接",
   "openFailed": "无法打开目标",
-  "settingsTitle": "链接浏览器设置",
+  "settingsTitle": "链接全景设置",
   "settingsSections": "显示内容",
   "settingsBehavior": "行为",
   "settingsFilters": "默认筛选",

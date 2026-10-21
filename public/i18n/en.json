@@ -1,5 +1,5 @@
 {
-  "dockTitle": "Link Explorer",
+  "dockTitle": "Link Panorama",
   "refresh": "Refresh",
   "settings": "Settings",
   "loading": "Loading links…",
@@ -43,7 +43,7 @@
   "mentionContext": "Mentioned in the document body",
   "internalLink": "Internal link",
   "openFailed": "Could not open the target",
-  "settingsTitle": "Link Explorer settings",
+  "settingsTitle": "Link Panorama settings",
   "settingsSections": "Sections",
   "settingsBehavior": "Behavior",
   "settingsFilters": "Default filters",

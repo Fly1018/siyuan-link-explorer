@@ -16,7 +16,7 @@ A SiYuan dock panel that lists the current document's **outgoing links** and **b
 - **Filters**: exclude daily notes, exclude self references, or only show the current notebook.
 - **Scope**: switch between the whole document and the current block.
 - **Hover preview**: show the full context of the hovered item at the bottom of the panel.
-- **Health overview**: counts for every section, plus an “isolated document” badge. Click a category chip to jump to and highlight its section.
+- **Health overview**: counts for every section, plus an “isolated document” badge. Click the badge to list documents in the current notebook with no outgoing links, backlinks, or mentions; click a category chip to jump to and highlight its section.
 - **Keyboard navigation**: `ArrowUp` / `ArrowDown` move between items; `Enter` opens.
 - **Settings**: choose visible sections, grouping, auto-refresh, maximum items, and default filters.
 - **Click behavior**: block references open the target block; external links open in the default browser; assets open in a SiYuan tab.

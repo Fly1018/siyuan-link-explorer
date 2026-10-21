@@ -9,7 +9,7 @@ import {
 import { mount, unmount } from "svelte";
 import LinkPanel from "@/components/LinkPanel.svelte";
 import SettingsPanel from "@/components/SettingsPanel.svelte";
-import { svelteDialog } from "@/libs/dialog";
+import { simpleDialog, svelteDialog } from "@/libs/dialog";
 import {
     DEFAULT_SETTINGS,
     linkSettings,
@@ -58,6 +58,7 @@ export default class LinkExplorer extends Plugin {
     private lastBlockID = "";
     private panelApp: ReturnType<typeof mount> | null = null;
     private settingsDialog: ReturnType<typeof svelteDialog> | undefined;
+    private isolatedDialog: ReturnType<typeof simpleDialog> | undefined;
 
     onload() {
         this.disposed = false;
@@ -89,6 +90,7 @@ export default class LinkExplorer extends Plugin {
                         onSettingsChange: (next: LinkSettings) => plugin.applySettings(next),
                         onOpenSettings: () => plugin.openSettings(),
                         onScopeChange: (scope: LinkScope) => plugin.setScope(scope),
+                        onShowIsolated: () => void plugin.showIsolatedDocs(),
                     },
                 });
             },
@@ -126,6 +128,8 @@ export default class LinkExplorer extends Plugin {
         document.removeEventListener("selectionchange", this.onSelectionChange, true);
         this.settingsDialog?.close();
         this.settingsDialog = undefined;
+        this.isolatedDialog?.close();
+        this.isolatedDialog = undefined;
         if (this.panelApp) {
             unmount(this.panelApp);
             this.panelApp = null;
@@ -145,7 +149,8 @@ export default class LinkExplorer extends Plugin {
             "outgoing", "backlinks", "mentions", "externalLinks", "assets", "deadLinks",
             "emptyOutgoing", "emptyBacklinks", "emptyMentions", "emptyExternal",
             "emptyAssets", "emptyDead", "outgoingFlow", "backlinkFlow", "deadFlow",
-            "isolated", "searchPlaceholder", "excludeDaily", "excludeSelf", "onlyNotebook",
+            "isolated", "isolatedHint", "isolatedDocsHint", "isolatedEmpty", "isolatedLimit",
+            "searchPlaceholder", "excludeDaily", "excludeSelf", "onlyNotebook",
             "reference", "embed", "mention", "external", "asset", "deadTarget",
             "mentionContext", "internalLink", "openFailed",
             "copyReference", "copyLink", "openLink", "openAsset", "openInNewTab",
@@ -791,6 +796,117 @@ export default class LinkExplorer extends Plugin {
             console.error("[siyuan-link-explorer] open document failed", error);
             showMessage(this.t("openFailed", "Could not open the target block"), 4000, "error");
         }
+    }
+
+    private async showIsolatedDocs() {
+        const notebookID = this.currentNotebookID();
+        if (!notebookID || !ID_RE.test(notebookID)) {
+            showMessage(this.t("noDoc", "请先打开一个文档"), 3000, "info");
+            return;
+        }
+        const maxDocs = 80;
+        let rows: Array<{ id?: string; content?: string; hpath?: string }> = [];
+        try {
+            rows = await this.post<Array<{ id?: string; content?: string; hpath?: string }>>("/api/query/sql", {
+                stmt: `SELECT b.id, b.content, b.hpath FROM blocks b ` +
+                    `WHERE b.type = 'd' AND b.box = '${notebookID}' ` +
+                    `AND NOT EXISTS (SELECT 1 FROM refs r WHERE r.root_id = b.id) ` +
+                    `AND NOT EXISTS (SELECT 1 FROM refs r JOIN blocks tb ON tb.id = r.def_block_id ` +
+                    `WHERE (r.def_block_root_id = b.id OR r.def_block_id = b.id) AND tb.id IS NOT NULL) ` +
+                    `ORDER BY b.updated DESC LIMIT ${maxDocs + 1}`,
+            });
+        } catch (error) {
+            console.error("[siyuan-link-explorer] isolated docs query failed", error);
+            showMessage(this.t("error", "读取链接失败"), 4000, "error");
+            return;
+        }
+
+        const hasMore = (rows?.length || 0) > maxDocs;
+        const candidates = (rows || []).filter((row) => row.id).slice(0, maxDocs);
+        const toDoc = (row: { id?: string; content?: string; hpath?: string }) => ({
+            id: String(row.id),
+            title: this.clip(row.content, 200) || this.t("untitled", "Untitled"),
+            hpath: String(row.hpath || ""),
+        });
+        const checkMentions = async (row: { id?: string; content?: string; hpath?: string }) => {
+            const doc = toDoc(row);
+            try {
+                const response = await fetchSyncPost("/api/ref/getBacklink2", {
+                    id: doc.id,
+                    k: "",
+                    mk: "",
+                    includeBacklinks: false,
+                    includeMentions: true,
+                });
+                const mentions = Array.isArray(response?.data?.backmentions) ? response.data.backmentions : [];
+                return mentions.length === 0 ? doc : null;
+            } catch (error) {
+                // If mentions cannot be checked, keep the document rather than hiding it.
+                return doc;
+            }
+        };
+
+        const isolated: Array<{ id: string; title: string; hpath: string }> = [];
+        for (let i = 0; i < candidates.length; i += 10) {
+            const batch = await Promise.all(candidates.slice(i, i + 10).map(checkMentions));
+            for (const item of batch) {
+                if (item) isolated.push(item);
+            }
+        }
+        isolated.sort((a, b) => a.hpath.localeCompare(b.hpath) || a.title.localeCompare(b.title));
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "le-orphans";
+        const hint = document.createElement("div");
+        hint.className = "le-orphans__hint";
+        hint.textContent = this.t("isolatedDocsHint", "没有出链、反向链接或提及的文档");
+        wrapper.appendChild(hint);
+        if (hasMore) {
+            const limit = document.createElement("div");
+            limit.className = "le-orphans__hint";
+            limit.textContent = this.t("isolatedLimit", "仅统计前 {count} 篇文档").replace("{count}", String(maxDocs));
+            wrapper.appendChild(limit);
+        }
+
+        this.isolatedDialog?.close();
+        this.isolatedDialog = simpleDialog({
+            title: `${this.t("isolated", "孤立文档")}${isolated.length ? ` (${isolated.length})` : ""}`,
+            ele: wrapper,
+            width: "560px",
+            height: "60vh",
+            callback: () => {
+                this.isolatedDialog = undefined;
+            },
+        });
+
+        if (isolated.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "le-orphans__empty";
+            empty.textContent = this.t("isolatedEmpty", "当前笔记本没有孤立文档");
+            wrapper.appendChild(empty);
+            return;
+        }
+
+        const list = document.createElement("div");
+        list.className = "le-orphans__list";
+        for (const doc of isolated) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "le-orphan";
+            const title = document.createElement("span");
+            title.className = "le-orphan__title";
+            title.textContent = doc.title;
+            const path = document.createElement("span");
+            path.className = "le-orphan__path";
+            path.textContent = doc.hpath;
+            button.append(title, path);
+            button.addEventListener("click", () => {
+                this.openDoc(doc.id);
+                this.isolatedDialog?.close();
+            });
+            list.appendChild(button);
+        }
+        wrapper.appendChild(list);
     }
 
     private blockRef(item: LinkItem): string {

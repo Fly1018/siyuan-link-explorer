@@ -10,9 +10,10 @@
         onSettingsChange: (settings: typeof linkSettings) => void;
         onOpenSettings: () => void;
         onScopeChange: (scope: "doc" | "block") => void;
+        onShowIsolated: () => void;
     }
 
-    let { labels, onRefresh, onOpen, onContextMenu, onSettingsChange, onOpenSettings, onScopeChange }: Props = $props();
+    let { labels, onRefresh, onOpen, onContextMenu, onSettingsChange, onOpenSettings, onScopeChange, onShowIsolated }: Props = $props();
 
     let query = $state("");
     let hovered = $state<LinkItem | null>(null);
@@ -191,7 +192,13 @@
                     </button>
                 {/each}
                 {#if isolated}
-                    <span class="le-isolated">{labels.isolated}</span>
+                    <button
+                        type="button"
+                        class="le-isolated"
+                        title={labels.isolatedHint}
+                        aria-label={labels.isolatedHint}
+                        onclick={() => onShowIsolated()}
+                    >{labels.isolated}</button>
                 {/if}
             </div>
 
@@ -432,8 +439,16 @@
     }
 
     .le-isolated {
+        font-family: inherit;
         background: #fef3c7;
         color: #92400e;
+        cursor: pointer;
+    }
+
+    .le-isolated:hover,
+    .le-isolated:focus-visible {
+        border-color: #d97706;
+        outline: none;
     }
 
     .le-tools {

@@ -63,17 +63,18 @@
         title: string;
         flow: "out" | "in" | "dead";
         items: LinkItem[];
+        total: number;
         empty: string;
         show?: boolean;
     }
 
     const sections = $derived<SectionView[]>(([
-        { key: "outgoing", title: labels.outgoing, flow: "out" as const, items: filteredOutgoing, empty: labels.emptyOutgoing },
-        { key: "backlinks", title: labels.backlinks, flow: "in" as const, items: filteredBacklinks, empty: labels.emptyBacklinks },
-        { key: "mentions", title: labels.mentions, flow: "in" as const, items: filteredMentions, empty: labels.emptyMentions, show: linkSettings.showMentions && linkSettings.scope === "doc" },
-        { key: "external", title: labels.externalLinks, flow: "out" as const, items: filteredExternal, empty: labels.emptyExternal, show: linkSettings.showExternal },
-        { key: "assets", title: labels.assets, flow: "out" as const, items: filteredAssets, empty: labels.emptyAssets, show: linkSettings.showAssets },
-        { key: "dead", title: labels.deadLinks, flow: "dead" as const, items: filteredDead, empty: labels.emptyDead, show: linkSettings.showDead },
+        { key: "outgoing", title: labels.outgoing, flow: "out" as const, items: filteredOutgoing, total: linkState.outgoing.length, empty: labels.emptyOutgoing },
+        { key: "backlinks", title: labels.backlinks, flow: "in" as const, items: filteredBacklinks, total: linkState.backlinks.length, empty: labels.emptyBacklinks },
+        { key: "mentions", title: labels.mentions, flow: "in" as const, items: filteredMentions, total: linkState.mentions.length, empty: labels.emptyMentions, show: linkSettings.showMentions && linkSettings.scope === "doc" },
+        { key: "external", title: labels.externalLinks, flow: "out" as const, items: filteredExternal, total: linkState.external.length, empty: labels.emptyExternal, show: linkSettings.showExternal },
+        { key: "assets", title: labels.assets, flow: "out" as const, items: filteredAssets, total: linkState.assets.length, empty: labels.emptyAssets, show: linkSettings.showAssets },
+        { key: "dead", title: labels.deadLinks, flow: "dead" as const, items: filteredDead, total: linkState.dead.length, empty: labels.emptyDead, show: linkSettings.showDead },
     ] as SectionView[]).filter((section) => section.show !== false));
 
     const stats = $derived([
@@ -173,6 +174,17 @@
         previewSuppressedUntil = Date.now() + 350;
     }
 
+    function hidePreview() {
+        clearPreviewTimer();
+        hovered = null;
+    }
+
+    const previewText = $derived(
+        hovered
+            ? [hovered.fullContext, hovered.context].find((text) => text && text !== hovered.title) || ""
+            : "",
+    );
+
     onDestroy(clearPreviewTimer);
 </script>
 
@@ -193,7 +205,7 @@
         </button>
     </header>
 
-    <div class="le-scroll">
+    <div class="le-scroll" onscroll={hidePreview}>
         <div class="le-scope">
             <button type="button" class="le-scope__btn" class:active={linkSettings.scope === "doc"} onclick={() => onScopeChange("doc")}>
                 {labels.scopeDoc}
@@ -269,7 +281,7 @@
                     </div>
 
                     {#if section.items.length === 0}
-                        <div class="le-empty">{section.empty}</div>
+                        <div class="le-empty">{section.total === 0 ? section.empty : labels.noMatch}</div>
                     {:else}
                         {#each groupItems(section.items) as [group, items] (group)}
                             {@const key = groupKey(section.key, group)}
@@ -283,7 +295,7 @@
                                 {/if}
                                 {#if !group || !isCollapsed(key)}
                                     <ul class="le-list">
-                                        {#each items as item (item.kind + item.id + item.meta + item.group)}
+                                        {#each items as item (item.key)}
                                             <li>
                                                 <LinkItemRow
                                                     {item}
@@ -318,8 +330,10 @@
                     onclick={closePreview}
                 >×</button>
             </div>
-            <div class="le-preview__body">{hovered.fullContext || hovered.context || hovered.title}</div>
-            {#if hovered.meta}
+            {#if previewText}
+                <div class="le-preview__body">{previewText}</div>
+            {/if}
+            {#if hovered.meta && hovered.meta !== hovered.title}
                 <div class="le-preview__meta">{hovered.meta}</div>
             {/if}
         </div>
@@ -492,14 +506,14 @@
 
     .le-isolated {
         font-family: inherit;
-        background: #fef3c7;
-        color: #92400e;
+        background: color-mix(in srgb, #f59e0b 20%, var(--b3-theme-surface));
+        color: color-mix(in srgb, #b45309 55%, var(--b3-theme-on-surface));
         cursor: pointer;
     }
 
     .le-isolated:hover,
     .le-isolated:focus-visible {
-        border-color: #d97706;
+        border-color: color-mix(in srgb, #d97706 70%, var(--b3-border-color));
         outline: none;
     }
 

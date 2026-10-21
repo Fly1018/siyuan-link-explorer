@@ -1,16 +1,89 @@
-# Changelog
+# 更新日志
 
-All notable changes to the **Link Panorama** plugin will be documented in this file.
+这里记录「链接速览」每一次更新中你能直接感受到的变化：新增了什么、哪里更顺手、修掉了什么问题。
 
-## v0.3.0 (2026-10-21)
+升级方式：在「集市 → 已下载 → 插件」里点击更新即可，已有设置会自动保留。
 
-- Renames the display name to 链接全景 / Link Panorama (the plugin id `siyuan-link-explorer` stays the same).
-- Rewrites the user-facing README (Chinese and English) around why and how to use the panel, with a FAQ.
-- Adds a configurable UI font size (10–25 px); the whole panel scales with it.
-- Adds a hover-preview toggle and a manual close button; moving the pointer into the preview keeps it open, and closing it no longer re-opens immediately.
-- Makes the “isolated document” badge clickable: it lists documents in the current notebook with no outgoing links, backlinks, or mentions, and each entry opens the document.
-- Fixes: mentions stat now follows the search filter; the isolated badge no longer shows in block scope; Enter reliably opens the focused item; dead references no longer also appear under outgoing links; the hover preview no longer causes scroll jitter (it is now an overlay).
+## 0.3.2 · 2026-10-21
 
-## v0.2.x (2026-10-19)
+> Faster link loading and a set of correctness fixes.
 
-- Initial Vite + Svelte rebuild: outgoing links, backlinks, mentions, external links, asset references, dead links; search, grouping, filters, scope switching, keyboard navigation, and settings.
+### 改进
+
+- **提及加载更快**：原来每篇提及文档都要单独查询一次，最多 50 次；现在合并成一次查询，提及较多时面板明显更快。
+- **孤立文档扫描有反馈**：点击「孤立文档」后会立即弹出窗口并显示「正在扫描…」，扫描完成后标题显示数量；窗口高度跟随内容，条目少时不再留出大片空白。
+- **无结果提示更准确**：搜索或筛选后没有匹配项时显示「没有匹配的链接」，不再误报「当前文档没有出链」。
+- **减少重复信息**：当引用所在块的内容与方向行完全相同时（例如目录里的块引用），不再重复显示一遍上下文。
+
+### 修复
+
+- **重复引用不再重复列出**：同一段里对同一目标的多次引用只显示一条，避免列表重复甚至渲染报错。
+- **代码块里的链接不再被误判**：解析 Markdown 时会跳过代码块、行内代码和 HTML 注释。
+- **带括号的链接能完整识别**：例如 `https://example.com/wiki/Foo_(bar)` 不再被截断。
+- **同文档引用显示更清楚**：指向本文档内其他块的出链/反链会显示目标块内容，不再显示成「本文档 → 本文档」。
+- **隐藏面板时暂停自动刷新**：停靠栏收起或在后台标签页时不再反复查询，重新显示时自动补一次刷新。
+- **悬停预览**：滚动列表时立即收起预览，避免预览停留在已经滚走的条目上。
+- **键盘导航**：上下方向键只在当前面板内移动焦点。
+- **深色主题**：「孤立文档」与「失效链接」标签改用主题色混合，深色主题下不再刺眼。
+
+## 0.3.1 · 2026-10-21
+
+> New display name, settings window layout fix, and an orphan-detection fix.
+
+### 改进
+
+- **新名字**：显示名称改为「链接速览 / Link Overview」，比原来的「链接全景」更朴素直接。插件 id 与仓库地址保持不变，已保存的设置不受影响。
+
+### 修复
+
+- **设置窗口排版**：设置项现在会铺满整个窗口宽度，右侧不再出现一大块空白和多余的滚动条；窗口高度改为跟随内容，只有屏幕较矮时才会滚动。
+- **孤立文档误判**：关掉「显示提及」后，被其他文档提到的笔记不会再被误标为「孤立文档」。现在面板始终会在后台检查提及，只是不显示提及分区。
+
+## 0.3.0 · 2026-10-21
+
+> New name, rewritten docs, adjustable font size, a hover-preview switch, and several fixes.
+
+### 新增
+
+- **界面字号可调**：在设置里把面板字号调到 10–25 px。高分屏、宽侧栏或习惯大字号时，整个面板（包括条目、搜索框和预览）会一起放大。
+- **悬停预览开关**：如果不喜欢鼠标划过时弹出的预览，可以在设置里关掉。
+- **预览可手动关闭**：预览框右上角新增关闭按钮；关闭后不会因为鼠标还停在条目上而立刻重新弹出。
+
+### 改进
+
+- **新名字**：显示名称改为「链接全景 / Link Panorama」，更能说明它是「一眼看全所有链接」的面板。
+- **说明文档重写**：README 按「为什么用、能做什么、怎么用、常见问题」重写，新增适用场景与数据安全说明。
+
+### 修复
+
+- 提及的数量现在会跟随搜索和筛选变化，不再一直显示总数。
+- 切换到「当前块」范围时不再显示「孤立文档」标记——孤岛是整篇文档的概念。
+- 用键盘上下键移动焦点后，回车可以可靠地打开当前条目。
+- 失效链接不再同时出现在「出链」列表里，避免同一条断链被数两遍。
+- 悬停预览改为浮层显示，不再挤动列表导致滚动位置跳动。
+
+## 0.2.1 · 2026-10-21
+
+> The isolated-document badge now opens a list of orphan notes.
+
+### 新增
+
+- **孤立文档列表**：点击面板上的「孤立文档」标记，会列出当前笔记本中所有没有出链、反向链接和提及的文档；点击任意一条即可直接打开，适合集中整理「孤岛」笔记。
+
+## 0.2.0 · 2026-10-19
+
+> First release.
+
+### 功能
+
+- **六类链接一屏看全**：出链、反向链接、提及、外部链接、资源引用、失效链接。
+- **方向清晰**：出链显示「本文档 → 目标」，反向链接和提及显示「来源 → 本文档」。
+- **点哪跳哪**：块引用跳到目标块并高亮，外部链接用默认浏览器打开，资源在思源页签中打开。
+- **搜索与分组**：按标题、上下文、文档名搜索；按来源或目标文档分组，分组可折叠。
+- **筛选**：排除日记、排除自引用、仅看当前笔记本。
+- **范围切换**：在「整篇文档」和「当前块」之间切换。
+- **链接健康概览**：各类链接数量一览；点击分类可跳转并高亮对应区块。
+- **悬停预览**：鼠标停在条目上，在面板底部查看完整上下文。
+- **键盘导航**：上下方向键移动，回车打开。
+- **右键菜单**：复制块引用、在新页签或分屏打开、打开来源或目标文档。
+- **设置**：选择显示哪些分区、是否按文档分组、编辑后自动刷新、单类最大条数与默认筛选。

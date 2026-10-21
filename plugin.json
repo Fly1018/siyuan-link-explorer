@@ -2,7 +2,7 @@
   "name": "siyuan-link-explorer",
   "author": "Fly1018",
   "url": "https://github.com/Fly1018/siyuan-link-explorer",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "minAppVersion": "3.8.0",
   "backends": [
     "all"
@@ -13,9 +13,9 @@
     "browser-desktop"
   ],
   "displayName": {
-    "default": "Link Panorama",
-    "zh_CN": "链接全景",
-    "en_US": "Link Panorama"
+    "default": "Link Overview",
+    "zh_CN": "链接速览",
+    "en_US": "Link Overview"
   },
   "description": {
     "default": "See every link around the current document: outgoing links, backlinks, mentions, external links, assets, and dead links, all clickable.",
@@ -37,6 +37,6 @@
     "链接",
     "出链",
     "反向链接",
-    "链接全景"
+    "链接速览"
   ]
 }

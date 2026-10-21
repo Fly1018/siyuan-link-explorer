@@ -118,7 +118,10 @@
         display: flex;
         flex-direction: column;
         gap: 14px;
-        height: 100%;
+        flex: 1 1 auto;
+        width: 100%;
+        min-width: 0;
+        max-height: calc(100vh - 100px);
         box-sizing: border-box;
         padding: 16px;
         overflow: auto;

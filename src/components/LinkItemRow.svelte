@@ -40,6 +40,20 @@
                             ? labels.deadTarget
                             : labels.reference,
     );
+    // A reference whose block contains nothing but the link repeats the direction line.
+    const showContext = $derived(
+        Boolean(item.context) &&
+        item.context !== from &&
+        item.context !== to &&
+        item.context !== item.title,
+    );
+    // Backlink anchors can repeat the source line for self references.
+    const showMeta = $derived(
+        Boolean(item.meta) &&
+        item.meta !== from &&
+        item.meta !== to &&
+        item.meta !== item.title,
+    );
 
     function onKeyDown(event: KeyboardEvent) {
         if (event.key === "Enter") {
@@ -49,7 +63,8 @@
         }
         if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
         event.preventDefault();
-        const items = Array.from(document.querySelectorAll<HTMLElement>(".le-panel .le-item"));
+        const panel = (event.currentTarget as HTMLElement).closest(".le-panel") || document;
+        const items = Array.from(panel.querySelectorAll<HTMLElement>(".le-item"));
         const index = items.indexOf(event.currentTarget as HTMLElement);
         const next = items[index + (event.key === "ArrowDown" ? 1 : -1)];
         next?.focus();
@@ -75,12 +90,12 @@
         <span class="le-arrow" class:le-arrow--in={flow === "in"} class:le-arrow--dead={flow === "dead"}>→</span>
         <span class="le-flow le-flow--target">{to}</span>
     </span>
-    {#if item.context}
+    {#if showContext}
         <span class="le-item__context">{item.context}</span>
     {/if}
     <span class="le-item__footer">
         <span class="le-item__kind">{kindLabel}</span>
-        {#if item.meta}
+        {#if showMeta}
             <span class="le-item__meta">{item.meta}</span>
         {/if}
     </span>
@@ -186,8 +201,8 @@
     }
 
     .le-item--dead .le-item__kind {
-        background: #fee2e2;
-        color: #b91c1c;
+        background: color-mix(in srgb, #ef4444 18%, var(--b3-theme-surface));
+        color: color-mix(in srgb, #b91c1c 55%, var(--b3-theme-on-surface));
     }
 
     .le-item__meta {

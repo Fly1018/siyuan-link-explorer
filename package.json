@@ -1,6 +1,6 @@
 {
   "name": "siyuan-link-explorer",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "description": "See every link around the current SiYuan document: outgoing links, backlinks, mentions, external links, assets, and dead links.",

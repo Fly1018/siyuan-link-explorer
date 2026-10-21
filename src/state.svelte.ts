@@ -3,6 +3,8 @@ export type LinkScope = "doc" | "block";
 
 export interface LinkItem {
     id: string;
+    /** Stable identity for keyed rendering; two occurrences of the same link must not share it. */
+    key: string;
     title: string;
     context: string;
     fullContext: string;

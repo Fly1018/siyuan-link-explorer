@@ -1,8 +1,8 @@
-# Link Panorama
+# Link Overview
 
 > See every link around the current document — outgoing links, backlinks, mentions, external links, assets, and dead links — all in one clickable panel.
 
-Link Panorama is a SiYuan dock panel. While you write, a document's connections are scattered everywhere: block references hide in the body, backlinks live in another pane, and external links only show up in the source. Link Panorama gathers them all into one right-side panel: what this document links to, and what links back, is visible the moment you open it — and every entry jumps to its target in one click.
+Link Overview is a SiYuan dock panel. While you write, a document's connections are scattered everywhere: block references hide in the body, backlinks live in another pane, and external links only show up in the source. Link Overview gathers them all into one right-side panel: what this document links to, and what links back, is visible the moment you open it — and every entry jumps to its target in one click.
 
 ## Why use it
 
@@ -49,7 +49,7 @@ Probably not a fit if:
 ## Usage
 
 1. Enable the plugin.
-2. Open the **Link Panorama** dock from the right dock bar.
+2. Open the **Link Overview** dock from the right dock bar.
 3. Open any document. The panel lists all of its links.
 4. Click an item to jump to the target; hover to read the full context.
 

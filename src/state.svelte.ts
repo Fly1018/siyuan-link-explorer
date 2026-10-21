@@ -31,6 +31,7 @@ export interface LinkSettings {
     excludeSelf: boolean;
     onlyNotebook: boolean;
     scope: LinkScope;
+    fontSize: number;
 }
 
 export const DEFAULT_SETTINGS: LinkSettings = {
@@ -45,6 +46,7 @@ export const DEFAULT_SETTINGS: LinkSettings = {
     excludeSelf: false,
     onlyNotebook: false,
     scope: "doc",
+    fontSize: 13,
 };
 
 export const linkSettings = $state<LinkSettings>({ ...DEFAULT_SETTINGS });

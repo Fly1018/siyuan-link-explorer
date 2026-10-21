@@ -55,6 +55,8 @@
   "autoRefresh": "Refresh after edits",
   "maxItems": "Maximum items per section",
   "maxItemsHint": "Range 50–2000; extra items are not shown.",
+  "fontSize": "UI font size (px)",
+  "fontSizeHint": "Range 10–25; default 13. Larger sizes suit high-DPI screens or a wide dock.",
   "save": "Save",
   "cancel": "Cancel",
   "copyReference": "Copy block reference",

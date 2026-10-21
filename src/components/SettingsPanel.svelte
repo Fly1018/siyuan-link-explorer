@@ -22,6 +22,7 @@
     let excludeSelf = $state(initial.excludeSelf);
     let onlyNotebook = $state(initial.onlyNotebook);
     let maxItems = $state(initial.maxItems);
+    let fontSize = $state(initial.fontSize ?? 13);
 
     function save() {
         onSave({
@@ -36,6 +37,7 @@
             excludeSelf,
             onlyNotebook,
             maxItems: Math.min(2000, Math.max(50, Math.round(Number(maxItems) || 500))),
+            fontSize: Math.min(25, Math.max(10, Math.round(Number(fontSize) || 13))),
         });
     }
 </script>
@@ -76,6 +78,11 @@
             <input class="b3-text-field" type="number" min="50" max="2000" step="50" bind:value={maxItems} />
         </label>
         <small class="les-settings__hint">{labels.maxItemsHint}</small>
+        <label class="les-settings__field">
+            <span>{labels.fontSize}</span>
+            <input class="b3-text-field" type="number" min="10" max="25" step="1" bind:value={fontSize} />
+        </label>
+        <small class="les-settings__hint">{labels.fontSizeHint}</small>
     </div>
 
     <div class="les-settings__group">

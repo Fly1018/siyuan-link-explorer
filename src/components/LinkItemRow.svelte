@@ -90,13 +90,13 @@
     .le-item {
         display: flex;
         flex-direction: column;
-        gap: 3px;
+        gap: 0.231em;
         width: 100%;
         box-sizing: border-box;
-        margin: 0 0 4px;
-        padding: 7px 8px;
+        margin: 0 0 0.308em;
+        padding: 0.538em 0.615em;
         border: 1px solid transparent;
-        border-radius: 6px;
+        border-radius: 0.462em;
         background: transparent;
         color: inherit;
         text-align: left;
@@ -117,7 +117,7 @@
     .le-item__direction {
         display: flex;
         align-items: baseline;
-        gap: 5px;
+        gap: 0.385em;
         min-width: 0;
         overflow: hidden;
         font-weight: 600;
@@ -163,7 +163,7 @@
         -webkit-line-clamp: 2;
         line-clamp: 2;
         color: var(--b3-theme-on-surface);
-        font-size: 12px;
+        font-size: 0.923em;
         line-height: 1.5;
         word-break: break-word;
     }
@@ -171,18 +171,18 @@
     .le-item__footer {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 0.462em;
         min-width: 0;
     }
 
     .le-item__kind {
         flex: none;
-        padding: 0 5px;
-        border-radius: 4px;
+        padding: 0 0.385em;
+        border-radius: 0.308em;
         background: var(--b3-theme-surface-lighter);
         color: var(--b3-theme-on-surface);
-        font-size: 10px;
-        line-height: 16px;
+        font-size: 0.769em;
+        line-height: 1.231em;
     }
 
     .le-item--dead .le-item__kind {
@@ -195,7 +195,7 @@
         text-overflow: ellipsis;
         white-space: nowrap;
         color: var(--b3-theme-on-surface);
-        font-size: 11px;
+        font-size: 0.846em;
         opacity: 0.8;
     }
 </style>

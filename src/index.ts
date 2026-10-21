@@ -159,6 +159,7 @@ export default class LinkExplorer extends Plugin {
             "settingsTitle", "settingsSections", "settingsBehavior", "settingsFilters",
             "showMentions", "showExternal", "showAssets", "showDead",
             "groupByDoc", "autoRefresh", "maxItems", "maxItemsHint", "save", "cancel",
+            "fontSize", "fontSizeHint",
         ];
         const result: Record<string, string> = {};
         for (const key of keys) result[key] = this.t(key, key);
@@ -1043,6 +1044,8 @@ export default class LinkExplorer extends Plugin {
         }
         const max = Number(raw.maxItems);
         if (Number.isFinite(max)) settings.maxItems = Math.min(MAX_PER_LIST, Math.max(50, Math.round(max)));
+        const size = Number(raw.fontSize);
+        if (Number.isFinite(size)) settings.fontSize = Math.min(25, Math.max(10, Math.round(size)));
         if (raw.scope === "block") settings.scope = "block";
         return settings;
     }

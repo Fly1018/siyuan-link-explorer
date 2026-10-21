@@ -55,6 +55,8 @@
   "autoRefresh": "编辑后自动刷新",
   "maxItems": "单类最多显示",
   "maxItemsHint": "范围 50–2000，超出部分不显示。",
+  "fontSize": "界面字号 (px)",
+  "fontSizeHint": "范围 10–25；默认 13。较大的字号适合高分屏或宽侧栏。",
   "save": "保存",
   "cancel": "取消",
   "copyReference": "复制块引用",

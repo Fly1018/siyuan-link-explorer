@@ -283,6 +283,7 @@
 
 <style>
     .le-panel {
+        position: relative;
         display: flex;
         flex-direction: column;
         height: 100%;
@@ -588,12 +589,19 @@
     }
 
     .le-preview {
-        flex: none;
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 20;
         max-height: 170px;
-        overflow: auto;
+        overflow: hidden;
         padding: 8px 10px;
         border-top: 1px solid var(--b3-border-color);
         background: var(--b3-theme-surface);
+        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.12);
+        /* Overlay without changing layout; avoids the hover feedback loop. */
+        pointer-events: none;
     }
 
     .le-preview__title {

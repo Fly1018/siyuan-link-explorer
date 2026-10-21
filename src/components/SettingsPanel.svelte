@@ -23,6 +23,7 @@
     let onlyNotebook = $state(initial.onlyNotebook);
     let maxItems = $state(initial.maxItems);
     let fontSize = $state(initial.fontSize ?? 13);
+    let hoverPreview = $state(initial.hoverPreview ?? true);
 
     function save() {
         onSave({
@@ -38,6 +39,7 @@
             onlyNotebook,
             maxItems: Math.min(2000, Math.max(50, Math.round(Number(maxItems) || 500))),
             fontSize: Math.min(25, Math.max(10, Math.round(Number(fontSize) || 13))),
+            hoverPreview,
         });
     }
 </script>
@@ -72,6 +74,10 @@
         <label class="les-settings__check">
             <input type="checkbox" class="b3-switch" bind:checked={autoRefresh} />
             <span>{labels.autoRefresh}</span>
+        </label>
+        <label class="les-settings__check">
+            <input type="checkbox" class="b3-switch" bind:checked={hoverPreview} />
+            <span>{labels.hoverPreview}</span>
         </label>
         <label class="les-settings__field">
             <span>{labels.maxItems}</span>

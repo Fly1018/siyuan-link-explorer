@@ -159,7 +159,7 @@ export default class LinkExplorer extends Plugin {
             "settingsTitle", "settingsSections", "settingsBehavior", "settingsFilters",
             "showMentions", "showExternal", "showAssets", "showDead",
             "groupByDoc", "autoRefresh", "maxItems", "maxItemsHint", "save", "cancel",
-            "fontSize", "fontSizeHint",
+            "fontSize", "fontSizeHint", "hoverPreview", "previewClose",
         ];
         const result: Record<string, string> = {};
         for (const key of keys) result[key] = this.t(key, key);
@@ -1038,7 +1038,7 @@ export default class LinkExplorer extends Plugin {
         if (!raw || typeof raw !== "object") return settings;
         for (const key of [
             "showMentions", "showExternal", "showAssets", "showDead",
-            "groupByDoc", "autoRefresh", "excludeDaily", "excludeSelf", "onlyNotebook",
+            "groupByDoc", "autoRefresh", "excludeDaily", "excludeSelf", "onlyNotebook", "hoverPreview",
         ] as const) {
             if (typeof raw[key] === "boolean") settings[key] = raw[key];
         }

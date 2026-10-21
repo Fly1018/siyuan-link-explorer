@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { onDestroy } from "svelte";
     import { linkSettings, linkState, type LinkItem } from "@/state.svelte";
     import LinkItemRow from "./LinkItemRow.svelte";
 
@@ -131,13 +132,48 @@
         }, 1400);
     }
 
+    let previewTimer: ReturnType<typeof setTimeout> | null = null;
+    let previewSuppressedUntil = 0;
+
+    function clearPreviewTimer() {
+        if (previewTimer) {
+            clearTimeout(previewTimer);
+            previewTimer = null;
+        }
+    }
+
     function onHover(item: LinkItem) {
+        if (!linkSettings.hoverPreview || Date.now() < previewSuppressedUntil) return;
+        clearPreviewTimer();
         hovered = item;
     }
 
     function onLeave(item: LinkItem) {
-        if (hovered === item) hovered = null;
+        if (hovered !== item) return;
+        clearPreviewTimer();
+        previewTimer = setTimeout(() => {
+            hovered = null;
+            previewTimer = null;
+        }, 180);
     }
+
+    function onPreviewEnter() {
+        clearPreviewTimer();
+    }
+
+    function onPreviewLeave() {
+        clearPreviewTimer();
+        hovered = null;
+    }
+
+    function closePreview() {
+        clearPreviewTimer();
+        hovered = null;
+        // The pointer is still over the panel, so ignore the immediate re-hover.
+        previewSuppressedUntil = Date.now() + 350;
+    }
+
+    onDestroy(clearPreviewTimer);
 </script>
 
 <div class="le-panel" style={`--le-font-size: ${linkSettings.fontSize || 13}px`}>
@@ -270,9 +306,18 @@
         {/if}
     </div>
 
-    {#if hovered}
-        <div class="le-preview">
-            <div class="le-preview__title">{hovered.title}</div>
+    {#if hovered && linkSettings.hoverPreview}
+        <div class="le-preview" role="tooltip" onmouseenter={onPreviewEnter} onmouseleave={onPreviewLeave}>
+            <div class="le-preview__head">
+                <div class="le-preview__title">{hovered.title}</div>
+                <button
+                    type="button"
+                    class="le-preview__close"
+                    title={labels.previewClose}
+                    aria-label={labels.previewClose}
+                    onclick={closePreview}
+                >×</button>
+            </div>
             <div class="le-preview__body">{hovered.fullContext || hovered.context || hovered.title}</div>
             {#if hovered.meta}
                 <div class="le-preview__meta">{hovered.meta}</div>
@@ -604,19 +649,49 @@
         left: 0;
         z-index: 20;
         max-height: 13.08em;
-        overflow: hidden;
+        overflow: auto;
         padding: 0.615em 0.769em;
         border-top: 1px solid var(--b3-border-color);
         background: var(--b3-theme-surface);
         box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.12);
         /* Overlay without changing layout; avoids the hover feedback loop. */
-        pointer-events: none;
+        pointer-events: auto;
+    }
+
+    .le-preview__head {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.462em;
     }
 
     .le-preview__title {
+        flex: 1;
+        min-width: 0;
         margin-bottom: 0.308em;
         font-size: 0.923em;
         font-weight: 600;
+    }
+
+    .le-preview__close {
+        flex: none;
+        width: 1.4em;
+        height: 1.4em;
+        padding: 0;
+        border: 0;
+        border-radius: 0.3em;
+        background: transparent;
+        color: var(--b3-theme-on-surface);
+        font-size: 1em;
+        line-height: 1;
+        cursor: pointer;
+        opacity: 0.7;
+    }
+
+    .le-preview__close:hover,
+    .le-preview__close:focus-visible {
+        background: var(--b3-theme-background);
+        opacity: 1;
+        outline: none;
     }
 
     .le-preview__body {

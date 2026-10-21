@@ -18,7 +18,7 @@ A SiYuan dock panel that lists the current document's **outgoing links** and **b
 - **Hover preview**: show the full context of the hovered item at the bottom of the panel.
 - **Health overview**: counts for every section, plus an “isolated document” badge. Click the badge to list documents in the current notebook with no outgoing links, backlinks, or mentions; click a category chip to jump to and highlight its section.
 - **Keyboard navigation**: `ArrowUp` / `ArrowDown` move between items; `Enter` opens.
-- **Settings**: choose visible sections, grouping, auto-refresh, maximum items, UI font size (10–25 px), and default filters.
+- **Settings**: choose visible sections, grouping, auto-refresh, maximum items, UI font size (10–25 px), the hover-preview toggle, and default filters.
 - **Click behavior**: block references open the target block; external links open in the default browser; assets open in a SiYuan tab.
 - **Right-click menu**: copy the block reference, open in a new tab, split right/bottom, or open the source/target document.
 

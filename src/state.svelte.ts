@@ -32,6 +32,7 @@ export interface LinkSettings {
     onlyNotebook: boolean;
     scope: LinkScope;
     fontSize: number;
+    hoverPreview: boolean;
 }
 
 export const DEFAULT_SETTINGS: LinkSettings = {
@@ -47,6 +48,7 @@ export const DEFAULT_SETTINGS: LinkSettings = {
     onlyNotebook: false,
     scope: "doc",
     fontSize: 13,
+    hoverPreview: true,
 };
 
 export const linkSettings = $state<LinkSettings>({ ...DEFAULT_SETTINGS });

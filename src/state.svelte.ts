@@ -1,25 +1,9 @@
-export type LinkKind = "reference" | "embed" | "mention" | "external" | "asset" | "dead";
-export type LinkScope = "doc" | "block";
+import type { AssetKind, LinkItem, LinkKind } from "@/logic/links";
 
-export interface LinkItem {
-    id: string;
-    /** Stable identity for keyed rendering; two occurrences of the same link must not share it. */
-    key: string;
-    title: string;
-    context: string;
-    fullContext: string;
-    meta: string;
-    kind: LinkKind;
-    group: string;
-    sourceDocID: string;
-    targetDocID: string;
-    sourcePath: string;
-    targetPath: string;
-    sourceBox: string;
-    targetBox: string;
-    self: boolean;
-    url?: string;
-}
+export type { AssetKind, LinkItem, LinkKind };
+
+export type LinkScope = "doc" | "block";
+export type SortMode = "default" | "title" | "updated";
 
 export interface LinkSettings {
     showMentions: boolean;
@@ -35,6 +19,8 @@ export interface LinkSettings {
     scope: LinkScope;
     fontSize: number;
     hoverPreview: boolean;
+    hideEmptySections: boolean;
+    sortMode: SortMode;
 }
 
 export const DEFAULT_SETTINGS: LinkSettings = {
@@ -51,9 +37,41 @@ export const DEFAULT_SETTINGS: LinkSettings = {
     scope: "doc",
     fontSize: 13,
     hoverPreview: true,
+    hideEmptySections: false,
+    sortMode: "default",
 };
 
 export const linkSettings = $state<LinkSettings>({ ...DEFAULT_SETTINGS });
+
+export interface IsolatedDoc {
+    id: string;
+    title: string;
+    hpath: string;
+}
+
+export interface HealthDoc {
+    id: string;
+    title: string;
+    hpath: string;
+    count: number;
+}
+
+export interface MissingAsset {
+    path: string;
+    name?: string;
+}
+
+export interface HealthData {
+    docs: number;
+    deadRefs: number;
+    deadDocs: HealthDoc[];
+    topOutgoing: HealthDoc[];
+    topIncoming: HealthDoc[];
+    missingAssets: MissingAsset[];
+}
+
+/** Only the most recently updated documents are scanned for the orphan list. */
+export const ISOLATED_MAX = 80;
 
 export const linkState = $state({
     docID: "",
@@ -70,4 +88,13 @@ export const linkState = $state({
     external: [] as LinkItem[],
     assets: [] as LinkItem[],
     dead: [] as LinkItem[],
+    isolatedActive: false,
+    isolatedLoading: false,
+    isolatedError: "",
+    isolatedDocs: [] as IsolatedDoc[],
+    isolatedHasMore: false,
+    healthActive: false,
+    healthLoading: false,
+    healthError: "",
+    healthData: null as HealthData | null,
 });

@@ -1,9 +1,9 @@
 {
   "name": "siyuan-link-explorer",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
-  "description": "See every link around the current SiYuan document: outgoing links, backlinks, mentions, external links, assets, and dead links.",
+  "description": "See every link around the current SiYuan document: outgoing links, backlinks, mentions, external links, assets grouped by type, and dead links.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Fly1018/siyuan-link-explorer.git"
@@ -20,9 +20,11 @@
   },
   "scripts": {
     "dev": "vite build --watch",
-    "build": "node ./scripts/clean.js && vite build && node ./scripts/package.js",
+    "build": "node ./scripts/clean.js && vite build && node ./scripts/package.js && node ./scripts/verify.mjs",
     "package": "node ./scripts/package.js",
-    "check": "tsc --noEmit -p tsconfig.json && svelte-check --tsconfig ./tsconfig.json"
+    "check": "tsc --noEmit -p tsconfig.json && svelte-check --tsconfig ./tsconfig.json",
+    "test": "tsc -p tsconfig.test.json && node --test tests/links.test.mjs tests/sql.test.mjs",
+    "verify": "node ./scripts/verify.mjs"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.0",

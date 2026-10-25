@@ -4,25 +4,53 @@ import {
     showMessage,
     openTab,
     getActiveEditor,
+    getAllEditor,
     fetchSyncPost,
 } from "siyuan";
 import { mount, unmount } from "svelte";
 import LinkPanel from "@/components/LinkPanel.svelte";
 import SettingsPanel from "@/components/SettingsPanel.svelte";
-import { simpleDialog, svelteDialog } from "@/libs/dialog";
+import { svelteDialog } from "@/libs/dialog";
 import {
-    DEFAULT_SETTINGS,
-    linkSettings,
-    linkState,
+    ID_RE,
+    assetKindOf,
+    assetOrder,
+    basename,
+    clip,
+    countOccurrences,
+    decodeEntities,
+    domainOf,
+    fullText,
+    isEmbed,
+    parseMarkdown,
+    stripHtml,
+    type AssetKind,
     type LinkItem,
     type LinkKind,
+} from "@/logic/links";
+import {
+    deadDocsStmt,
+    deadRefCountStmt,
+    docCountStmt,
+    refsStmt,
+    topIncomingStmt,
+    topOutgoingStmt,
+} from "@/logic/sql";
+import {
+    DEFAULT_SETTINGS,
+    ISOLATED_MAX,
+    linkSettings,
+    linkState,
+    type HealthData,
+    type HealthDoc,
+    type IsolatedDoc,
     type LinkScope,
     type LinkSettings,
+    type MissingAsset,
 } from "@/state.svelte";
 import "./index.scss";
 
 interface RefRow {
-    refID?: string;
     sourceBlockID?: string;
     sourceDocID?: string;
     targetBlockID?: string;
@@ -37,18 +65,33 @@ interface RefRow {
     targetPath?: string;
     sourceBox?: string;
     targetBox?: string;
+    sourceUpdated?: string;
+    targetUpdated?: string;
+    refCount?: number;
 }
 
 interface TitleRow {
     id?: string;
     content?: string;
     hpath?: string;
+    box?: string;
+}
+
+interface CountRow {
+    count?: number;
+}
+
+interface HealthRow {
+    id?: string;
+    title?: string;
+    hpath?: string;
+    count?: number;
 }
 
 const DOCK_TYPE = "link-explorer";
-const ID_RE = /^[0-9a-z-]{1,64}$/i;
 const MAX_PER_LIST = 2000;
 const MAX_MENTIONS = 50;
+const MISSING_ASSETS_TTL = 60_000;
 
 export default class LinkExplorer extends Plugin {
     private disposed = false;
@@ -58,11 +101,15 @@ export default class LinkExplorer extends Plugin {
     private lastBlockID = "";
     private panelApp: ReturnType<typeof mount> | null = null;
     private settingsDialog: ReturnType<typeof svelteDialog> | undefined;
-    private isolatedDialog: ReturnType<typeof simpleDialog> | undefined;
     private dockElement: HTMLElement | null = null;
     private dockObserver: IntersectionObserver | null = null;
     private pendingRefresh = false;
+    private pendingTimer: ReturnType<typeof setInterval> | null = null;
     private isolatedSeq = 0;
+    private healthSeq = 0;
+    private missingAssetsAt = 0;
+    private missingAssetPaths = new Set<string>();
+    private missingAssetList: MissingAsset[] = [];
 
     onload() {
         this.disposed = false;
@@ -89,13 +136,23 @@ export default class LinkExplorer extends Plugin {
                     target: element,
                     props: {
                         labels: plugin.labels(),
-                        onRefresh: () => void plugin.refresh(),
+                        onRefresh: () => void (linkState.healthActive
+                            ? plugin.openHealth()
+                            : linkState.isolatedActive
+                                ? plugin.openIsolatedDocs()
+                                : plugin.refresh()),
                         onOpen: (item: LinkItem) => plugin.openItem(item),
                         onContextMenu: (event: MouseEvent, item: LinkItem) => plugin.showItemMenu(event, item),
                         onSettingsChange: (next: LinkSettings) => plugin.applySettings(next),
                         onOpenSettings: () => plugin.openSettings(),
                         onScopeChange: (scope: LinkScope) => plugin.setScope(scope),
-                        onShowIsolated: () => void plugin.showIsolatedDocs(),
+                        onShowIsolated: () => void plugin.openIsolatedDocs(),
+                        onCloseIsolated: () => plugin.closeIsolatedDocs(),
+                        onOpenIsolated: (doc: IsolatedDoc) => plugin.openDoc(doc.id),
+                        onShowHealth: () => void plugin.openHealth(),
+                        onCloseHealth: () => plugin.closeHealth(),
+                        onOpenHealthDoc: (doc: HealthDoc) => plugin.openDoc(doc.id),
+                        onCopyReport: (text: string) => plugin.copyText(text),
                     },
                 });
                 // Auto-refresh is paused while the dock is hidden; catch up when it becomes visible.
@@ -104,15 +161,16 @@ export default class LinkExplorer extends Plugin {
                     plugin.dockObserver = new IntersectionObserver((entries) => {
                         if (!plugin.pendingRefresh) return;
                         if (!entries.some((entry) => entry.isIntersecting)) return;
-                        plugin.pendingRefresh = false;
-                        plugin.scheduleRefresh(true);
+                        plugin.flushPendingRefresh();
                     });
                     plugin.dockObserver.observe(element);
                 }
+                if (plugin.pendingRefresh) plugin.flushPendingRefresh();
             },
             destroy() {
                 plugin.dockObserver?.disconnect();
                 plugin.dockObserver = null;
+                plugin.clearPendingTimer();
                 plugin.dockElement = null;
                 if (plugin.panelApp) {
                     unmount(plugin.panelApp);
@@ -140,6 +198,7 @@ export default class LinkExplorer extends Plugin {
             clearTimeout(this.timer);
             this.timer = null;
         }
+        this.clearPendingTimer();
         this.eventBus.off("switch-protyle", this.onProtyleEvent);
         this.eventBus.off("loaded-protyle-static", this.onProtyleEvent);
         this.eventBus.off("destroy-protyle", this.onProtyleDestroy);
@@ -147,8 +206,6 @@ export default class LinkExplorer extends Plugin {
         document.removeEventListener("selectionchange", this.onSelectionChange, true);
         this.settingsDialog?.close();
         this.settingsDialog = undefined;
-        this.isolatedDialog?.close();
-        this.isolatedDialog = undefined;
         this.dockObserver?.disconnect();
         this.dockObserver = null;
         this.dockElement = null;
@@ -158,6 +215,17 @@ export default class LinkExplorer extends Plugin {
             this.panelApp = null;
         }
         this.resetState();
+        this.isolatedSeq += 1;
+        linkState.isolatedActive = false;
+        linkState.isolatedLoading = false;
+        linkState.isolatedError = "";
+        linkState.isolatedDocs = [];
+        linkState.isolatedHasMore = false;
+        this.healthSeq += 1;
+        linkState.healthActive = false;
+        linkState.healthLoading = false;
+        linkState.healthError = "";
+        linkState.healthData = null;
     }
 
     private t(key: string, fallback: string): string {
@@ -168,22 +236,27 @@ export default class LinkExplorer extends Plugin {
     private labels(): Record<string, string> {
         const keys = [
             "dockTitle", "refresh", "settings", "loading", "noDoc", "error",
-            "untitled", "thisDoc", "scopeDoc", "scopeBlock", "needBlock", "jumpTo",
+            "untitled", "thisDoc", "scopeDoc", "scopeBlock", "needBlock", "showOnly", "showAll",
             "outgoing", "backlinks", "mentions", "externalLinks", "assets", "deadLinks",
             "emptyOutgoing", "emptyBacklinks", "emptyMentions", "emptyExternal",
             "emptyAssets", "emptyDead", "outgoingFlow", "backlinkFlow", "deadFlow", "noMatch",
+            "assetImage", "assetVideo", "assetAudio", "assetPdf", "assetDocument", "assetArchive", "assetOther",
+            "assetMissing", "missingAssetsNote", "noLinks",
             "isolated", "isolatedHint", "isolatedDocsHint", "isolatedEmpty", "isolatedLimit",
-            "isolatedScanning",
+            "isolatedScanning", "backToLinks",
+            "health", "healthHint", "healthDocs", "healthDeadRefs", "healthMissing",
+            "healthDeadDocs", "healthTopOutgoing", "healthTopIncoming", "healthEmpty",
             "searchPlaceholder", "excludeDaily", "excludeSelf", "onlyNotebook",
             "reference", "embed", "mention", "external", "asset", "deadTarget",
             "mentionContext", "internalLink", "openFailed",
             "copyReference", "copyLink", "openLink", "openAsset", "openInNewTab",
             "openInSplitRight", "openInSplitBottom", "openSourceDoc", "openTargetDoc",
-            "copied", "copyFailed",
+            "copied", "copyFailed", "copyReport", "collapseAll", "expandAll",
             "settingsTitle", "settingsSections", "settingsBehavior", "settingsFilters",
             "showMentions", "showExternal", "showAssets", "showDead",
             "groupByDoc", "autoRefresh", "maxItems", "maxItemsHint", "save", "cancel",
             "fontSize", "fontSizeHint", "hoverPreview", "previewClose",
+            "hideEmptySections", "sortMode", "sortDefault", "sortTitle", "sortUpdated",
         ];
         const result: Record<string, string> = {};
         for (const key of keys) result[key] = this.t(key, key);
@@ -207,12 +280,17 @@ export default class LinkExplorer extends Plugin {
 
     private onProtyleDestroy = (event: any) => {
         if (this.disposed) return;
-        const rootID = event?.detail?.protyle?.block?.rootID || "";
-        if (rootID && rootID === this.lastRootID) {
-            this.lastRootID = "";
-            this.lastBlockID = "";
-            this.scheduleRefresh(true);
-        }
+        const protyle = event?.detail?.protyle;
+        const rootID = protyle?.block?.rootID || "";
+        if (!rootID || rootID !== this.lastRootID) return;
+        // A closing search preview or split must not clear a document that is
+        // still open in another editor.
+        const stillOpen = getAllEditor().some((editor) =>
+            editor?.protyle !== protyle && editor?.protyle?.block?.rootID === rootID);
+        if (stillOpen) return;
+        this.lastRootID = "";
+        this.lastBlockID = "";
+        this.scheduleRefresh(true);
     };
 
     private onWs = (event: any) => {
@@ -228,7 +306,7 @@ export default class LinkExplorer extends Plugin {
         if (!force && !linkSettings.autoRefresh) return;
         if (!this.isDockVisible()) {
             // Keep the refresh pending instead of querying the kernel for a hidden dock.
-            this.pendingRefresh = true;
+            this.markPending();
             return;
         }
         if (this.timer) clearTimeout(this.timer);
@@ -236,6 +314,39 @@ export default class LinkExplorer extends Plugin {
             this.timer = null;
             void this.refresh();
         }, 700);
+    }
+
+    private markPending() {
+        this.pendingRefresh = true;
+        if (this.pendingTimer) return;
+        // IntersectionObserver can report a zero-width (hidden) dock as
+        // intersecting, so it never fires again when the dock opens. Poll the
+        // real layout while a refresh is owed; it stops as soon as it flushes.
+        this.pendingTimer = setInterval(() => {
+            if (this.disposed) {
+                this.clearPendingTimer();
+                return;
+            }
+            if (!this.pendingRefresh) {
+                this.clearPendingTimer();
+                return;
+            }
+            if (this.isDockVisible()) this.flushPendingRefresh();
+        }, 500);
+    }
+
+    private flushPendingRefresh() {
+        if (this.disposed || !this.pendingRefresh) return;
+        this.pendingRefresh = false;
+        this.clearPendingTimer();
+        this.scheduleRefresh(true);
+    }
+
+    private clearPendingTimer() {
+        if (this.pendingTimer) {
+            clearInterval(this.pendingTimer);
+            this.pendingTimer = null;
+        }
     }
 
     private isDockVisible(): boolean {
@@ -263,6 +374,38 @@ export default class LinkExplorer extends Plugin {
         } catch (error) {
             return "";
         }
+    }
+
+    private async resolveNotebookID(): Promise<string> {
+        const docID = linkState.docID || this.lastRootID;
+        if (!docID || !ID_RE.test(docID)) return "";
+        try {
+            const rows = await this.post<Array<{ box?: string }>>("/api/query/sql", {
+                stmt: `SELECT box FROM blocks WHERE id = '${docID}' LIMIT 1`,
+            });
+            return String(rows?.[0]?.box || "");
+        } catch (error) {
+            return "";
+        }
+    }
+
+    /** Missing asset files in the workspace, cached briefly to avoid a call per refresh. */
+    private async loadMissingAssets(): Promise<{ paths: Set<string>; list: MissingAsset[] }> {
+        if (Date.now() - this.missingAssetsAt < MISSING_ASSETS_TTL) {
+            return { paths: this.missingAssetPaths, list: this.missingAssetList };
+        }
+        try {
+            const data = await this.post<Array<{ path?: string; item?: string; name?: string }> | null>("/api/asset/getMissingAssets", {});
+            const list: MissingAsset[] = (data || [])
+                .map((item) => ({ path: String(item?.path || item?.item || ""), name: item?.name }))
+                .filter((item) => item.path);
+            this.missingAssetPaths = new Set(list.map((item) => item.path));
+            this.missingAssetList = list;
+            this.missingAssetsAt = Date.now();
+        } catch (error) {
+            // Read-only or publish mode may refuse the call; keep the last result.
+        }
+        return { paths: this.missingAssetPaths, list: this.missingAssetList };
     }
 
     private liveBlockID(): string {
@@ -359,22 +502,29 @@ export default class LinkExplorer extends Plugin {
         linkState.loading = true;
         linkState.error = "";
         linkState.scope = scope;
-        linkState.notebookID = notebookID;
 
         const subjectID = blockID || rootID;
         const max = Math.min(MAX_PER_LIST, Math.max(50, Math.round(Number(linkSettings.maxItems) || 500)));
 
         try {
             const titleRows = await this.post<TitleRow[]>("/api/query/sql", {
-                stmt: `SELECT id, content, hpath FROM blocks WHERE id IN ('${rootID}'` +
+                stmt: `SELECT id, content, hpath, box FROM blocks WHERE id IN ('${rootID}'` +
                     (blockID ? `, '${blockID}'` : "") + `)`,
             });
             if (this.disposed || seq !== this.refreshSeq) return;
             const docRow = (titleRows || []).find((row) => row.id === rootID);
             const blockRow = blockID ? (titleRows || []).find((row) => row.id === blockID) : undefined;
-            const docTitle = this.clip(docRow?.content, 200) || this.t("untitled", "Untitled");
-            const blockTitle = this.clip(blockRow?.content, 200) || "";
+            const docTitle = clip(docRow?.content, 200) || this.t("untitled", "Untitled");
+            const blockTitle = clip(blockRow?.content, 200) || "";
             const docPath = String(docRow?.hpath || "");
+            // getActiveEditor() can fail while the dock has focus; the document's
+            // own box is authoritative and also drives the notebook filter.
+            const resolvedNotebookID = notebookID || String(docRow?.box || "");
+            if (linkState.notebookID && resolvedNotebookID && resolvedNotebookID !== linkState.notebookID) {
+                if (linkState.isolatedActive) linkState.isolatedActive = false;
+                if (linkState.healthActive) linkState.healthActive = false;
+            }
+            linkState.notebookID = resolvedNotebookID;
 
             if (scope === "block" && !blockRow) {
                 linkState.docID = rootID;
@@ -398,9 +548,9 @@ export default class LinkExplorer extends Plugin {
             linkState.scopeBlockTitle = blockTitle;
 
             const [outgoingRows, backlinkRows, deadRows] = await Promise.all([
-                this.post<RefRow[]>("/api/query/sql", { stmt: this.refsStmt(rootID, blockID, "outgoing", max) }),
-                this.post<RefRow[]>("/api/query/sql", { stmt: this.refsStmt(rootID, blockID, "backlinks", max) }),
-                this.post<RefRow[]>("/api/query/sql", { stmt: this.refsStmt(rootID, blockID, "dead", max) }),
+                this.post<RefRow[]>("/api/query/sql", { stmt: refsStmt(rootID, blockID, "outgoing", max) }),
+                this.post<RefRow[]>("/api/query/sql", { stmt: refsStmt(rootID, blockID, "backlinks", max) }),
+                this.post<RefRow[]>("/api/query/sql", { stmt: refsStmt(rootID, blockID, "dead", max) }),
             ]);
             if (this.disposed || seq !== this.refreshSeq) return;
 
@@ -413,7 +563,7 @@ export default class LinkExplorer extends Plugin {
                 scope === "doc"
                     // Mentions are always collected: the isolated-document badge
                     // needs them even when the mentions section is hidden.
-                    ? this.loadMentions(rootID, notebookID, docTitle, docPath, linkSettings.showMentions)
+                    ? this.loadMentions(rootID, resolvedNotebookID, docTitle, docPath, linkSettings.showMentions)
                         .catch((error) => {
                             console.warn("[siyuan-link-explorer] mentions failed", error);
                             return [] as LinkItem[];
@@ -428,17 +578,17 @@ export default class LinkExplorer extends Plugin {
             let external: LinkItem[] = [];
             let assets: LinkItem[] = [];
             if (markdown) {
-                const parsed = this.parseMarkdown(markdown, {
+                const parsed = parseMarkdown(markdown, {
                     sourceDocID: rootID,
                     sourceDocTitle: docTitle,
                     sourcePath: docPath,
-                    sourceBox: notebookID,
+                    sourceBox: resolvedNotebookID,
                     targetDocID: "",
                     targetPath: "",
                     targetBox: "",
                     group: this.t("thisDoc", "This document"),
                     self: false,
-                });
+                }, (key, fallback) => this.t(key, fallback));
                 external = parsed.external;
                 assets = parsed.assets;
                 if (parsed.internal.length) {
@@ -452,7 +602,21 @@ export default class LinkExplorer extends Plugin {
                 }
             }
 
+            if (assets.length) {
+                const missing = await this.loadMissingAssets();
+                if (this.disposed || seq !== this.refreshSeq) return;
+                for (const item of assets) {
+                    if (item.url) item.assetMissing = missing.paths.has(item.url);
+                }
+            }
+
+            // The refs table stores one row per source/target pair; count the
+            // actual occurrences inside the source blocks in one batched call.
+            await this.applyRefCounts([...outgoing, ...backlinks, ...dead]);
             if (this.disposed || seq !== this.refreshSeq) return;
+
+            if (this.disposed || seq !== this.refreshSeq) return;
+            assets.sort((a, b) => assetOrder(a.assetKind) - assetOrder(b.assetKind));
             linkState.outgoing = outgoing.slice(0, max);
             linkState.backlinks = backlinks.slice(0, max);
             linkState.mentions = mentions.slice(0, max);
@@ -475,37 +639,10 @@ export default class LinkExplorer extends Plugin {
         }
     }
 
-    private refsStmt(rootID: string, blockID: string, mode: "outgoing" | "backlinks" | "dead", max: number): string {
-        const where = mode === "outgoing"
-            ? (blockID ? `r.block_id = '${blockID}' AND tb.id IS NOT NULL` : `r.root_id = '${rootID}' AND tb.id IS NOT NULL`)
-            : mode === "backlinks"
-                ? (blockID
-                    ? `r.def_block_id = '${blockID}' AND tb.id IS NOT NULL`
-                    : `(r.def_block_root_id = '${rootID}' OR r.def_block_id = '${rootID}') AND tb.id IS NOT NULL`)
-                : (blockID
-                    ? `(r.block_id = '${blockID}' OR r.def_block_id = '${blockID}') AND tb.id IS NULL`
-                    : `(r.root_id = '${rootID}' OR r.def_block_root_id = '${rootID}' OR r.def_block_id = '${rootID}') AND tb.id IS NULL`);
-        return `SELECT r.id AS refID, r.block_id AS sourceBlockID, r.root_id AS sourceDocID, ` +
-            `r.def_block_id AS targetBlockID, r.def_block_root_id AS targetDocID, ` +
-            `r.content AS anchor, r.markdown AS markdown, ` +
-            `sb.content AS sourceText, tb.content AS targetText, ` +
-            `sd.content AS sourceDocTitle, td.content AS targetDocTitle, ` +
-            `sd.hpath AS sourcePath, td.hpath AS targetPath, ` +
-            `sd.box AS sourceBox, td.box AS targetBox ` +
-            `FROM refs r ` +
-            `LEFT JOIN blocks sb ON sb.id = r.block_id ` +
-            `LEFT JOIN blocks tb ON tb.id = r.def_block_id ` +
-            `LEFT JOIN blocks sd ON sd.id = r.root_id ` +
-            `LEFT JOIN blocks td ON td.id = r.def_block_root_id ` +
-            `WHERE ${where} ORDER BY r.block_id, r.def_block_id LIMIT ${max}`;
-    }
-
     private mapRefs(rows: RefRow[], mode: "outgoing" | "backlinks" | "dead", docTitle: string): LinkItem[] {
         const items: LinkItem[] = [];
-        // The refs table stores one row per reference occurrence. Keep the first
-        // occurrence per source/target pair so repeated links in one block do not
-        // produce duplicate rows (which would also break keyed rendering).
-        const seen = new Set<string>();
+        // The SQL groups by source/target pair, so each row is already unique and
+        // refCount carries how many times that pair is referenced.
         for (const row of rows) {
             const sourceDocID = String(row.sourceDocID || "");
             const targetDocID = String(row.targetDocID || "");
@@ -513,20 +650,19 @@ export default class LinkExplorer extends Plugin {
             const targetBox = String(row.targetBox || "");
             const sourcePath = String(row.sourcePath || "");
             const targetPath = String(row.targetPath || "");
-            const anchor = this.clip(row.anchor, 200);
-            const sourceText = this.clip(row.sourceText, 260);
-            const targetText = this.clip(row.targetText, 260);
-            const sourceDocTitle = this.clip(row.sourceDocTitle, 200);
-            const targetDocTitle = this.clip(row.targetDocTitle, 200);
+            const anchor = clip(row.anchor, 200);
+            const sourceText = clip(row.sourceText, 260);
+            const targetText = clip(row.targetText, 260);
+            const sourceDocTitle = clip(row.sourceDocTitle, 200);
+            const targetDocTitle = clip(row.targetDocTitle, 200);
             const self = Boolean(sourceDocID && targetDocID && sourceDocID === targetDocID);
-            const kind: LinkKind = this.isEmbed(row.markdown) ? "embed" : "reference";
+            const kind: LinkKind = isEmbed(row.markdown) ? "embed" : "reference";
+            const count = Math.max(1, Number(row.refCount) || 1);
 
             if (mode === "outgoing") {
                 const id = String(row.targetBlockID || "");
                 if (!id) continue;
                 const key = `outgoing:${String(row.sourceBlockID || "")}:${id}`;
-                if (seen.has(key)) continue;
-                seen.add(key);
                 const title = self
                     ? (targetText || anchor || targetDocTitle || this.t("untitled", "Untitled"))
                     : (targetDocTitle || targetText || anchor || this.t("untitled", "Untitled"));
@@ -535,9 +671,13 @@ export default class LinkExplorer extends Plugin {
                     key,
                     title,
                     context: sourceText || anchor,
-                    fullContext: this.full(row.sourceText || row.anchor || row.targetText),
+                    fullContext: fullText(row.sourceText || row.anchor || row.targetText),
                     meta: anchor && anchor !== title ? anchor : (targetText && targetText !== title ? targetText : ""),
                     kind,
+                    count,
+                    sourceBlockID: String(row.sourceBlockID || ""),
+                    refTargetID: id,
+                    updated: String(row.targetUpdated || ""),
                     group: targetDocTitle || this.t("thisDoc", "This document"),
                     sourceDocID,
                     targetDocID,
@@ -554,16 +694,18 @@ export default class LinkExplorer extends Plugin {
                 const id = String(row.sourceBlockID || "");
                 if (!id) continue;
                 const key = `dead:${id}:${String(row.targetBlockID || "")}`;
-                if (seen.has(key)) continue;
-                seen.add(key);
                 items.push({
                     id,
                     key,
                     title: this.t("deadTarget", "Target is missing"),
                     context: sourceText || anchor,
-                    fullContext: this.full(sourceText || anchor || targetText),
+                    fullContext: fullText(sourceText || anchor || targetText),
                     meta: anchor || String(row.targetBlockID || ""),
                     kind: "dead",
+                    count,
+                    sourceBlockID: id,
+                    refTargetID: String(row.targetBlockID || ""),
+                    updated: String(row.sourceUpdated || ""),
                     group: sourceDocTitle || docTitle,
                     sourceDocID,
                     targetDocID,
@@ -579,8 +721,6 @@ export default class LinkExplorer extends Plugin {
             const id = String(row.sourceBlockID || "");
             if (!id) continue;
             const key = `backlinks:${id}:${String(row.targetBlockID || "")}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
             items.push({
                 id,
                 key,
@@ -588,9 +728,13 @@ export default class LinkExplorer extends Plugin {
                     ? (sourceText || anchor || sourceDocTitle || this.t("untitled", "Untitled"))
                     : (sourceDocTitle || sourceText || anchor || this.t("untitled", "Untitled")),
                 context: sourceText || anchor,
-                fullContext: this.full(row.sourceText || row.anchor || row.targetText),
+                fullContext: fullText(row.sourceText || row.anchor || row.targetText),
                 meta: anchor || targetText,
                 kind,
+                count,
+                sourceBlockID: id,
+                refTargetID: String(row.targetBlockID || ""),
+                updated: String(row.sourceUpdated || ""),
                 group: sourceDocTitle || docTitle,
                 sourceDocID,
                 targetDocID,
@@ -602,6 +746,28 @@ export default class LinkExplorer extends Plugin {
             });
         }
         return items;
+    }
+
+    private async applyRefCounts(items: LinkItem[]): Promise<void> {
+        const ids = Array.from(new Set(items
+            .map((item) => item.sourceBlockID)
+            .filter((id): id is string => Boolean(id && ID_RE.test(id)))));
+        if (!ids.length) return;
+        // A paragraph referencing the same block ten times contributes one refs
+        // row, so fetch the source kramdown in one batch and count occurrences.
+        let kramdowns: Record<string, string> = {};
+        try {
+            const response = await fetchSyncPost("/api/block/getBlockKramdowns", { ids: ids.slice(0, 200) });
+            if (response?.code === 0 && response.data) kramdowns = response.data;
+        } catch (error) {
+            return;
+        }
+        for (const item of items) {
+            const md = item.sourceBlockID ? kramdowns[item.sourceBlockID] : "";
+            if (!md || !item.refTargetID) continue;
+            const count = countOccurrences(md, item.refTargetID);
+            if (count > 1) item.count = count;
+        }
     }
 
     private async loadMentions(
@@ -658,16 +824,17 @@ export default class LinkExplorer extends Plugin {
         for (const { sourceDocID, path } of docs) {
             const match = contexts.get(sourceDocID);
             const blockID = match?.id || sourceDocID;
-            const context = this.clip(match?.content, 260) || fallbackContext;
-            const sourceDocTitle = this.clip(path?.name, 200) || this.t("untitled", "Untitled");
+            const context = clip(match?.content, 260) || fallbackContext;
+            const sourceDocTitle = clip(path?.name, 200) || this.t("untitled", "Untitled");
             items.push({
                 id: blockID,
                 key: `mention:${sourceDocID}`,
                 title: sourceDocTitle,
                 context,
-                fullContext: this.full(context),
+                fullContext: fullText(context),
                 meta: docTitle,
                 kind: "mention",
+                updated: String(path?.updated || ""),
                 group: sourceDocTitle,
                 sourceDocID,
                 targetDocID: rootID,
@@ -693,173 +860,6 @@ export default class LinkExplorer extends Plugin {
             return fallback?.code === 0 ? String(fallback.data?.kramdown || "") : "";
         } catch (error) {
             return "";
-        }
-    }
-
-    private parseMarkdown(
-        markdown: string,
-        base: {
-            sourceDocID: string;
-            sourceDocTitle: string;
-            sourcePath: string;
-            sourceBox: string;
-            targetDocID: string;
-            targetPath: string;
-            targetBox: string;
-            group: string;
-            self: boolean;
-        },
-    ): { external: LinkItem[]; assets: LinkItem[]; internal: LinkItem[] } {
-        const external: LinkItem[] = [];
-        const assets: LinkItem[] = [];
-        const internal: LinkItem[] = [];
-        const seen = new Set<string>();
-        // Links inside code samples are not real links; drop code blocks and
-        // inline code before looking for Markdown/HTML links.
-        const text = String(markdown || "")
-            .replace(/```[\s\S]*?```/g, " ")
-            .replace(/~~~[\s\S]*?~~~/g, " ")
-            .replace(/<!--[\s\S]*?-->/g, " ")
-            .replace(/`[^`\n]*`/g, " ");
-
-        const push = (rawUrl: string, label: string, isImage: boolean) => {
-            const url = this.decodeEntities(String(rawUrl || "").trim())
-                .replace(/^</, "")
-                .replace(/>$/, "");
-            if (!url || url.startsWith("#") || /^(javascript|data:text)/i.test(url)) return;
-            const linkText = this.clip(this.decodeEntities(this.stripHtml(label)), 160);
-
-            if (/^siyuan:\/\/blocks?\//i.test(url)) {
-                const id = url.replace(/^siyuan:\/\/blocks?\//i, "").split(/[?#]/)[0];
-                if (!ID_RE.test(id) || seen.has("i:" + id)) return;
-                seen.add("i:" + id);
-                internal.push({
-                    id,
-                    key: "internal:" + id,
-                    title: linkText || id,
-                    context: this.t("internalLink", "Internal link"),
-                    fullContext: linkText || url,
-                    meta: url,
-                    kind: "reference",
-                    group: base.group,
-                    sourceDocID: base.sourceDocID,
-                    targetDocID: "",
-                    sourcePath: base.sourcePath,
-                    targetPath: "",
-                    sourceBox: base.sourceBox,
-                    targetBox: "",
-                    self: false,
-                });
-                return;
-            }
-
-            if (/^(https?:\/\/|mailto:|tel:)/i.test(url)) {
-                if (seen.has("e:" + url)) return;
-                seen.add("e:" + url);
-                external.push({
-                    id: url,
-                    key: "external:" + url,
-                    title: linkText || url,
-                    context: url,
-                    fullContext: url,
-                    meta: this.domainOf(url),
-                    kind: "external",
-                    group: base.group,
-                    sourceDocID: base.sourceDocID,
-                    targetDocID: base.targetDocID,
-                    sourcePath: base.sourcePath,
-                    targetPath: base.targetPath,
-                    sourceBox: base.sourceBox,
-                    targetBox: base.targetBox,
-                    self: base.self,
-                    url,
-                });
-                return;
-            }
-
-            if (url.startsWith("assets/") ||
-                (/\.(png|jpe?g|gif|webp|bmp|svg|pdf|docx?|xlsx?|pptx?|zip|mp3|mp4|wav)(\?|#|$)/i.test(url) && !/^[a-z]+:/i.test(url))) {
-                if (seen.has("a:" + url)) return;
-                seen.add("a:" + url);
-                assets.push({
-                    id: url,
-                    key: "asset:" + url,
-                    title: linkText || this.basename(url) || (isImage ? this.t("asset", "Asset") : url),
-                    context: url,
-                    fullContext: url,
-                    meta: this.t("asset", "Asset"),
-                    kind: "asset",
-                    group: base.group,
-                    sourceDocID: base.sourceDocID,
-                    targetDocID: base.targetDocID,
-                    sourcePath: base.sourcePath,
-                    targetPath: base.targetPath,
-                    sourceBox: base.sourceBox,
-                    targetBox: base.targetBox,
-                    self: base.self,
-                    url,
-                });
-            }
-        };
-
-        // One level of balanced parentheses is allowed so URLs like
-        // https://example.com/wiki/Foo_(bar) are kept intact.
-        const mdUrl = String.raw`(<[^>\n]+>|[^()\s]+(?:\([^()\s]*\)[^()\s]*)*)`;
-        for (const match of text.matchAll(new RegExp(String.raw`!\[([^\]]*)\]\(\s*${mdUrl}(?:\s+["'][^"']*["'])?\s*\)`, "g"))) {
-            push(match[2], match[1], true);
-        }
-        for (const match of text.matchAll(new RegExp(String.raw`(?<!!)\[([^\]]*)\]\(\s*${mdUrl}(?:\s+["'][^"']*["'])?\s*\)`, "g"))) {
-            push(match[2], match[1], false);
-        }
-        for (const match of text.matchAll(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
-            push(match[1], match[2], false);
-        }
-        for (const match of text.matchAll(/<img\b[^>]*src\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
-            push(match[1], "", true);
-        }
-        return { external, assets, internal };
-    }
-
-    private isEmbed(markdown: unknown): boolean {
-        return String(markdown || "").trimStart().startsWith("!");
-    }
-
-    private clip(value: unknown, max = 260): string {
-        const text = String(value == null ? "" : value).replace(/\s+/g, " ").trim();
-        if (!text) return "";
-        return text.length > max ? text.slice(0, max) + "…" : text;
-    }
-
-    private full(value: unknown): string {
-        const text = String(value == null ? "" : value).replace(/\s+/g, " ").trim();
-        return text.length > 1500 ? text.slice(0, 1500) + "…" : text;
-    }
-
-    private stripHtml(value: string): string {
-        return String(value || "").replace(/<[^>]*>/g, "");
-    }
-
-    private decodeEntities(value: string): string {
-        return String(value || "")
-            .replace(/&nbsp;/gi, " ")
-            .replace(/&amp;/gi, "&")
-            .replace(/&lt;/gi, "<")
-            .replace(/&gt;/gi, ">")
-            .replace(/&quot;/gi, "\"")
-            .replace(/&#39;/gi, "'");
-    }
-
-    private basename(path: string): string {
-        const clean = String(path || "").split(/[?#]/)[0];
-        return clean.split("/").pop() || clean;
-    }
-
-    private domainOf(url: string): string {
-        try {
-            const parsed = new URL(url);
-            return parsed.hostname || parsed.protocol.replace(":", "");
-        } catch (error) {
-            return String(url).split(":")[0] || "";
         }
     }
 
@@ -896,57 +896,52 @@ export default class LinkExplorer extends Plugin {
         }
     }
 
-    private async showIsolatedDocs() {
-        const notebookID = this.currentNotebookID();
+    private async openIsolatedDocs() {
+        let notebookID = linkState.notebookID || this.currentNotebookID();
+        if (!notebookID || !ID_RE.test(notebookID)) {
+            notebookID = await this.resolveNotebookID();
+        }
         if (!notebookID || !ID_RE.test(notebookID)) {
             showMessage(this.t("noDoc", "请先打开一个文档"), 3000, "info");
             return;
         }
-        const maxDocs = 80;
 
-        this.isolatedDialog?.close();
+        // The list is rendered in the dock panel, so show it before scanning.
         const token = ++this.isolatedSeq;
-
-        const wrapper = document.createElement("div");
-        wrapper.className = "le-orphans";
-        const hint = document.createElement("div");
-        hint.className = "le-orphans__hint";
-        hint.textContent = this.t("isolatedScanning", "正在扫描孤立文档…");
-        wrapper.appendChild(hint);
-
-        // Show the dialog first; scanning can take a moment on large notebooks.
-        this.isolatedDialog = simpleDialog({
-            title: this.t("isolated", "孤立文档"),
-            ele: wrapper,
-            width: "560px",
-            callback: () => {
-                this.isolatedSeq += 1;
-                this.isolatedDialog = undefined;
-            },
-        });
+        linkState.healthActive = false;
+        linkState.isolatedActive = true;
+        linkState.isolatedLoading = true;
+        linkState.isolatedError = "";
+        linkState.isolatedDocs = [];
+        linkState.isolatedHasMore = false;
 
         let rows: Array<{ id?: string; content?: string; hpath?: string }> = [];
         try {
             rows = await this.post<Array<{ id?: string; content?: string; hpath?: string }>>("/api/query/sql", {
                 stmt: `SELECT b.id, b.content, b.hpath FROM blocks b ` +
                     `WHERE b.type = 'd' AND b.box = '${notebookID}' ` +
-                    `AND NOT EXISTS (SELECT 1 FROM refs r WHERE r.root_id = b.id) ` +
+                    // Only live references count as outgoing, matching the panel badge.
+                    `AND NOT EXISTS (SELECT 1 FROM refs r JOIN blocks tb ON tb.id = r.def_block_id ` +
+                    `WHERE r.root_id = b.id) ` +
                     `AND NOT EXISTS (SELECT 1 FROM refs r JOIN blocks tb ON tb.id = r.def_block_id ` +
                     `WHERE (r.def_block_root_id = b.id OR r.def_block_id = b.id) AND tb.id IS NOT NULL) ` +
-                    `ORDER BY b.updated DESC LIMIT ${maxDocs + 1}`,
+                    `ORDER BY b.updated DESC LIMIT ${ISOLATED_MAX + 1}`,
             });
         } catch (error) {
             console.error("[siyuan-link-explorer] isolated docs query failed", error);
-            if (token === this.isolatedSeq) hint.textContent = this.t("error", "读取链接失败");
+            if (token === this.isolatedSeq) {
+                linkState.isolatedError = this.t("error", "读取链接失败");
+                linkState.isolatedLoading = false;
+            }
             return;
         }
         if (token !== this.isolatedSeq) return;
 
-        const hasMore = (rows?.length || 0) > maxDocs;
-        const candidates = (rows || []).filter((row) => row.id).slice(0, maxDocs);
-        const toDoc = (row: { id?: string; content?: string; hpath?: string }) => ({
+        const hasMore = (rows?.length || 0) > ISOLATED_MAX;
+        const candidates = (rows || []).filter((row) => row.id).slice(0, ISOLATED_MAX);
+        const toDoc = (row: { id?: string; content?: string; hpath?: string }): IsolatedDoc => ({
             id: String(row.id),
-            title: this.clip(row.content, 200) || this.t("untitled", "Untitled"),
+            title: clip(row.content, 200) || this.t("untitled", "Untitled"),
             hpath: String(row.hpath || ""),
         });
         const checkMentions = async (row: { id?: string; content?: string; hpath?: string }) => {
@@ -967,7 +962,7 @@ export default class LinkExplorer extends Plugin {
             }
         };
 
-        const isolated: Array<{ id: string; title: string; hpath: string }> = [];
+        const isolated: IsolatedDoc[] = [];
         for (let i = 0; i < candidates.length; i += 10) {
             const batch = await Promise.all(candidates.slice(i, i + 10).map(checkMentions));
             if (token !== this.isolatedSeq) return;
@@ -978,46 +973,77 @@ export default class LinkExplorer extends Plugin {
         isolated.sort((a, b) => a.hpath.localeCompare(b.hpath) || a.title.localeCompare(b.title));
         if (token !== this.isolatedSeq) return;
 
-        hint.textContent = this.t("isolatedDocsHint", "没有出链、反向链接或提及的文档");
-        const titleElement = this.isolatedDialog?.dialog.element.querySelector(".b3-dialog__header");
-        if (titleElement) {
-            titleElement.textContent = `${this.t("isolated", "孤立文档")}${isolated.length ? ` (${isolated.length})` : ""}`;
-        }
-        if (hasMore) {
-            const limit = document.createElement("div");
-            limit.className = "le-orphans__hint";
-            limit.textContent = this.t("isolatedLimit", "仅统计前 {count} 篇文档").replace("{count}", String(maxDocs));
-            wrapper.appendChild(limit);
-        }
+        linkState.isolatedDocs = isolated;
+        linkState.isolatedHasMore = hasMore;
+        linkState.isolatedLoading = false;
+    }
 
-        if (isolated.length === 0) {
-            const empty = document.createElement("div");
-            empty.className = "le-orphans__empty";
-            empty.textContent = this.t("isolatedEmpty", "当前笔记本没有孤立文档");
-            wrapper.appendChild(empty);
+    private closeIsolatedDocs() {
+        this.isolatedSeq += 1;
+        linkState.isolatedActive = false;
+        linkState.isolatedLoading = false;
+        linkState.isolatedError = "";
+        void this.refresh();
+    }
+
+    private async openHealth() {
+        let notebookID = linkState.notebookID || this.currentNotebookID();
+        if (!notebookID || !ID_RE.test(notebookID)) {
+            notebookID = await this.resolveNotebookID();
+        }
+        if (!notebookID || !ID_RE.test(notebookID)) {
+            showMessage(this.t("noDoc", "请先打开一个文档"), 3000, "info");
             return;
         }
 
-        const list = document.createElement("div");
-        list.className = "le-orphans__list";
-        for (const doc of isolated) {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "le-orphan";
-            const title = document.createElement("span");
-            title.className = "le-orphan__title";
-            title.textContent = doc.title;
-            const path = document.createElement("span");
-            path.className = "le-orphan__path";
-            path.textContent = doc.hpath;
-            button.append(title, path);
-            button.addEventListener("click", () => {
-                this.openDoc(doc.id);
-                this.isolatedDialog?.close();
-            });
-            list.appendChild(button);
+        const token = ++this.healthSeq;
+        linkState.isolatedActive = false;
+        linkState.healthActive = true;
+        linkState.healthLoading = true;
+        linkState.healthError = "";
+        linkState.healthData = null;
+
+        try {
+            const [docCount, deadCount, deadDocs, topOut, topIn, missing] = await Promise.all([
+                this.post<CountRow[]>("/api/query/sql", { stmt: docCountStmt(notebookID) }),
+                this.post<CountRow[]>("/api/query/sql", { stmt: deadRefCountStmt(notebookID) }),
+                this.post<HealthRow[]>("/api/query/sql", { stmt: deadDocsStmt(notebookID, 5) }),
+                this.post<HealthRow[]>("/api/query/sql", { stmt: topOutgoingStmt(notebookID, 5) }),
+                this.post<HealthRow[]>("/api/query/sql", { stmt: topIncomingStmt(notebookID, 5) }),
+                this.loadMissingAssets(),
+            ]);
+            if (token !== this.healthSeq || this.disposed) return;
+            const toDocs = (rows: HealthRow[] | null): HealthDoc[] => (rows || [])
+                .filter((row) => row.id)
+                .map((row) => ({
+                    id: String(row.id),
+                    title: clip(row.title, 200) || this.t("untitled", "Untitled"),
+                    hpath: String(row.hpath || ""),
+                    count: Number(row.count) || 0,
+                }));
+            const data: HealthData = {
+                docs: Number(docCount?.[0]?.count) || 0,
+                deadRefs: Number(deadCount?.[0]?.count) || 0,
+                deadDocs: toDocs(deadDocs),
+                topOutgoing: toDocs(topOut),
+                topIncoming: toDocs(topIn),
+                missingAssets: missing.list.slice(0, 500),
+            };
+            linkState.healthData = data;
+            linkState.healthLoading = false;
+        } catch (error) {
+            if (token !== this.healthSeq || this.disposed) return;
+            linkState.healthError = error instanceof Error ? error.message : this.t("error", "读取链接失败");
+            linkState.healthLoading = false;
         }
-        wrapper.appendChild(list);
+    }
+
+    private closeHealth() {
+        this.healthSeq += 1;
+        linkState.healthActive = false;
+        linkState.healthLoading = false;
+        linkState.healthError = "";
+        void this.refresh();
     }
 
     private blockRef(item: LinkItem): string {
@@ -1148,7 +1174,8 @@ export default class LinkExplorer extends Plugin {
         if (!raw || typeof raw !== "object") return settings;
         for (const key of [
             "showMentions", "showExternal", "showAssets", "showDead",
-            "groupByDoc", "autoRefresh", "excludeDaily", "excludeSelf", "onlyNotebook", "hoverPreview",
+            "groupByDoc", "autoRefresh", "excludeDaily", "excludeSelf", "onlyNotebook",
+            "hoverPreview", "hideEmptySections",
         ] as const) {
             if (typeof raw[key] === "boolean") settings[key] = raw[key];
         }
@@ -1157,6 +1184,7 @@ export default class LinkExplorer extends Plugin {
         const size = Number(raw.fontSize);
         if (Number.isFinite(size)) settings.fontSize = Math.min(25, Math.max(10, Math.round(size)));
         if (raw.scope === "block") settings.scope = "block";
+        if (raw.sortMode === "title" || raw.sortMode === "updated") settings.sortMode = raw.sortMode;
         return settings;
     }
 

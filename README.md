@@ -1,87 +1,145 @@
 # Link Overview
 
-> See every link around the current document — outgoing links, backlinks, mentions, external links, assets, and dead links — all in one clickable panel.
+![Link Overview](preview.png)
 
-Link Overview is a SiYuan dock panel. While you write, a document's connections are scattered everywhere: block references hide in the body, backlinks live in another pane, and external links only show up in the source. Link Overview gathers them all into one right-side panel: what this document links to, and what links back, is visible the moment you open it — and every entry jumps to its target in one click.
+A SiYuan dock plugin that collects every link around the current document — outgoing links, backlinks, mentions, external links, asset references, and dead links — into the right panel. Click any row to jump to it, without switching between the editor, the backlink panel, and the source.
 
-## Why use it
+## Highlights
 
-- **No more switching around**: outgoing links, backlinks, mentions, external links, asset references, and dead links are listed in a single panel instead of three different places.
-- **Everything is clickable**: block references jump to and highlight the target block; external links open in your default browser; assets open in a SiYuan tab.
-- **Direction is explicit**: outgoing entries show `This document → target`; backlinks and mentions show `source → This document`, so you always know who points to whom.
-- **Find broken and orphaned notes**: references to deleted blocks are flagged as dead links; documents with no links at all are marked isolated, and one click lists every “island” in the notebook — handy for library cleanups.
-- **Built for tidying**: search, group by document, exclude daily notes or self references, or restrict to the current notebook.
-- **Readable at any size**: the UI font size is adjustable from 10 to 25 px for high-DPI screens or a wide dock.
-
-### Is it for you?
-
-Good fit if:
-
-- You want to understand where a document sits in your knowledge base.
-- You are tidying the library and need to find dead links and isolated documents.
-- You follow references constantly and want a fuller view than the backlink pane.
-
-Probably not a fit if:
-
-- You only need bidirectional links — SiYuan's built-in backlink panel already covers that.
-- You want a visual graph — this plugin is a list, not a graph.
-
-## Features
-
-- **Outgoing links**: block references from the current document to other blocks or documents.
-- **Backlinks**: block references from other blocks or documents to the current document.
-- **Mentions**: document-level mentions of the current document title (via the backlink index).
-- **External links**: `http(s)`, `mailto`, and `tel` links parsed from the document Markdown.
-- **Asset references**: images, PDFs, and other `assets/...` references.
-- **Dead links**: references whose target block no longer exists.
-- **Direction labels**: outgoing shows `This document → target`; backlinks and mentions show `source → This document`.
-- **Search**: filter by title, context, document name, or meta.
-- **Grouping**: group items by source/target document; groups are collapsible.
-- **Filters**: exclude daily notes, exclude self references, or only show the current notebook.
-- **Scope**: switch between the whole document and the current block.
-- **Hover preview**: show the full context of the hovered item at the bottom of the panel; it can be turned off or dismissed manually.
-- **Health overview**: counts for every section, plus an “isolated document” badge. Click the badge to list documents in the current notebook with no outgoing links, backlinks, or mentions; click a category chip to jump to and highlight its section.
-- **Keyboard navigation**: `ArrowUp` / `ArrowDown` move between items; `Enter` opens.
-- **Settings**: choose visible sections, grouping, auto-refresh, maximum items, UI font size (10–25 px), the hover-preview toggle, and default filters.
-- **Click behavior**: block references open the target block; external links open in the default browser; assets open in a SiYuan tab.
-- **Right-click menu**: copy the block reference, open in a new tab, split right/bottom, or open the source/target document.
+- **Six link types in one place**: outgoing links, backlinks, mentions, external links, assets, and dead links.
+- **Stats work as filters**: click “Outgoing” to show only that category, click again to show everything. The same applies to every category.
+- **Assets grouped by type**: Image, Video, Audio, PDF, Document, Archive, and Other.
+- **Missing assets flagged**: references to files that no longer exist are marked.
+- **Isolated documents in the panel**: list documents in the current notebook that have no outgoing links, backlinks, or mentions, and open them directly.
+- **Notebook health**: dead links, missing assets, and the most-linked documents for the whole notebook.
+- **Copy a link report**: copy the current list as Markdown in one click.
+- **Every row is clickable**: block references jump to and highlight the target, external links open in your default browser, assets open in a SiYuan tab.
+- **Direction at a glance**: outgoing rows read “this document → target”; backlinks and mentions read “source → this document”.
 
 ## Usage
 
-1. Enable the plugin.
-2. Open the **Link Overview** dock from the right dock bar.
-3. Open any document. The panel lists all of its links.
-4. Click an item to jump to the target; hover to read the full context.
+1. Enable **Link Overview** in Bazaar → Downloaded → Plugins.
+2. Open any document and click the link icon in the right dock.
+3. The panel lists the document’s six link types. Click a row to jump.
+
+### Show one category
+
+Click a stat chip (for example, “3 Outgoing”) to switch the panel to that category only; click the same chip again to show all categories.
+
+Switching to another document, or switching between **Whole document** and **Current block**, resets the panel to show everything.
+
+### Check isolated documents
+
+When the current document has no outgoing links, no backlinks, and is not mentioned by any other document, the **Isolated documents** badge appears. Clicking it switches the panel to the orphan list in place:
+
+- It lists documents in the current notebook with no outgoing links, backlinks, or mentions.
+- Clicking a document opens it; the list stays open so you can work through several documents in a row.
+- **Back to links** returns to the current document’s links.
+
+To keep the scan responsive, only the 80 most recently updated documents in the notebook are checked.
+
+### Notebook health
+
+Click **Notebook health** in the panel to see the link health of the whole notebook:
+
+- document count, dead links, and missing assets;
+- the list of missing asset paths;
+- documents with the most dead links, the most outgoing links, and the most incoming links. Click one to open it.
+
+**Back to links** returns to the current document.
+
+### Copy a report
+
+The copy button in the panel header copies what is currently visible (the active category, search, and filters) as a Markdown list with titles, context, types, and missing-asset markers. Paste it into a document to use as a cleanup checklist.
+
+### Asset references
+
+Asset references are parsed from the document Markdown and grouped by file type:
+
+| Type | Common extensions |
+| --- | --- |
+| Image | png, jpg, jpeg, gif, webp, svg, avif, heic, and more |
+| Video | mp4, webm, mov, mkv, avi, and more |
+| Audio | mp3, wav, flac, m4a, aac, and more |
+| PDF | pdf |
+| Document | doc/docx, xls/xlsx, ppt/pptx, csv, md, epub, and more |
+| Archive | zip, rar, 7z, tar, gz, and more |
+| Other | any other file under `assets/` |
+
+SiYuan exports video and audio as `<video>` and `<audio>` tags; these are recognized and classified as well.
+
+Assets whose files no longer exist are marked **File missing**; the assets section and Notebook health both show the count.
+
+## Panel
+
+- **Header**: current document title, copy report, settings, refresh.
+- **Scope**: switch between **Whole document** and **Current block**.
+- **Stats**: counts for the six categories. Click to filter, click again to show all. The row also holds the **Isolated documents** and **Notebook health** entries.
+- **Search**: filter by title, context, document name, or extra information.
+- **Filters**: exclude daily notes, exclude self references, current notebook only, expand/collapse all.
+- **List**: grouped by document (assets by file type), with collapsible groups. Each row shows direction, context, type, and repeat count.
+- **Hover preview**: shows the full context at the bottom of the panel; it can be closed and hides when you scroll.
+- **Keyboard**: `Esc` clears search and filters, `/` focuses search, `Home`/`End` jump to the ends; ↑/↓ move and Enter opens.
+
+## Settings
+
+| Setting | Description |
+| --- | --- |
+| Sections | Choose which sections to show: mentions, external links, assets, dead links |
+| Hide empty sections | Sections without content no longer take up space |
+| Group by document | Group links by source/target document; assets are always grouped by file type |
+| Auto refresh | Update the list after the document changes |
+| Max per list | Show 50–2000 rows per category, default 500 |
+| Font size | 10–25 px, default 13 px |
+| Hover preview | Turn the floating preview on or off |
+| Sort by | Default, title, or last updated |
+| Default filters | Default state of exclude daily notes, exclude self references, current notebook only |
+
+Settings are stored in the plugin’s private storage and survive plugin updates.
 
 ## FAQ
 
-**Why don't I see mentions in block scope?**
+**What is a mention?**
 
-Mentions are document-level (other documents mentioning this document's title); there is no block-level data, so they only appear in whole-document scope.
+A place in another document’s body where the current document’s title appears. Mentions are document-level, so they are not shown in **Current block** scope.
 
-**What does “isolated document” mean?**
+**Why is a document with only dead links marked as isolated?**
 
-The current document has no outgoing links, no backlinks, and no mentions anywhere. Clicking the badge lists all such documents in the current notebook, which helps you connect or archive “island” notes.
+Dead links point to blocks that no longer exist, so they do not count as live outgoing links. The isolated-document list uses the same rule, so those documents are listed there too.
 
-**How are dead links detected?**
+**Do external links make network requests?**
 
-From `refs` entries whose target block no longer exists in the `blocks` table — the same rule the SiYuan kernel uses.
+No. The plugin makes no network requests; an external link is only handed to your system browser when you click it.
+
+**What happens when I click an asset?**
+
+Images, PDFs, videos, and other assets open in a SiYuan tab rather than an external viewer.
+
+**What does “File missing” mean?**
+
+The referenced path has no file under `assets/` — usually from a manual delete, a sync conflict, or copying a document from elsewhere. The plugin only flags it and never modifies or deletes the reference.
 
 **Is my data safe?**
 
-The plugin only reads indexes and Markdown through read-only APIs. It never writes notes, block attributes, or workspace configuration, and it makes no network requests (external links are opened by the system only when you click them).
+The plugin only reads indexes and Markdown through read-only APIs. It does not modify notes, block attributes, or workspace settings. The only thing it writes is its own panel settings, under `data/storage/petal/siyuan-link-explorer/`.
 
-## Scope notes
+**Does it support mobile?**
 
-- Mentions are document-level and are hidden in block scope.
-- External and asset links are parsed from Markdown; they are not indexed by `refs`.
-- Dead-link detection is based on `refs` entries whose `def_block_id` no longer exists in `blocks`.
+No. It supports desktop, desktop windows, and the desktop layout of the browser version.
 
-## Data impact
+**Does it work in publish or read-only mode?**
 
-- Reads `refs`, `blocks`, the backlink index, and the current document Markdown through read-only APIs.
-- Does not write notes, block attributes, or workspace configuration.
-- Does not make network requests (external links are only opened when clicked).
+Read-only browsing works. In publish mode the plugin’s private storage may reject writes, so settings are not saved.
+
+## Compatibility
+
+- SiYuan 3.8.0 or later.
+- Desktop, desktop window, and the desktop layout of the web version.
+- Uses SiYuan theme variables and supports dark themes; it does not override global `b3-*` styles.
+
+## Install and update
+
+Search for **Link Overview** in Bazaar and install it. Update it from Bazaar → Downloaded → Plugins; existing settings are kept.
 
 ## Development
 

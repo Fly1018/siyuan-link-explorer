@@ -24,6 +24,8 @@
     let maxItems = $state(initial.maxItems);
     let fontSize = $state(initial.fontSize ?? 13);
     let hoverPreview = $state(initial.hoverPreview ?? true);
+    let hideEmptySections = $state(initial.hideEmptySections ?? false);
+    let sortMode = $state(initial.sortMode ?? "default");
 
     function save() {
         onSave({
@@ -40,6 +42,8 @@
             maxItems: Math.min(2000, Math.max(50, Math.round(Number(maxItems) || 500))),
             fontSize: Math.min(25, Math.max(10, Math.round(Number(fontSize) || 13))),
             hoverPreview,
+            hideEmptySections,
+            sortMode,
         });
     }
 </script>
@@ -62,6 +66,10 @@
         <label class="les-settings__check">
             <input type="checkbox" class="b3-switch" bind:checked={showDead} />
             <span>{labels.showDead}</span>
+        </label>
+        <label class="les-settings__check">
+            <input type="checkbox" class="b3-switch" bind:checked={hideEmptySections} />
+            <span>{labels.hideEmptySections}</span>
         </label>
     </div>
 
@@ -89,6 +97,14 @@
             <input class="b3-text-field" type="number" min="10" max="25" step="1" bind:value={fontSize} />
         </label>
         <small class="les-settings__hint">{labels.fontSizeHint}</small>
+        <label class="les-settings__field">
+            <span>{labels.sortMode}</span>
+            <select class="b3-select" bind:value={sortMode}>
+                <option value="default">{labels.sortDefault}</option>
+                <option value="title">{labels.sortTitle}</option>
+                <option value="updated">{labels.sortUpdated}</option>
+            </select>
+        </label>
     </div>
 
     <div class="les-settings__group">
@@ -163,7 +179,8 @@
         flex: 1;
     }
 
-    .les-settings__field input {
+    .les-settings__field input,
+    .les-settings__field select {
         width: 110px;
     }
 

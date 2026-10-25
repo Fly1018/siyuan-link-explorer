@@ -13,6 +13,16 @@
 
     let { item, labels, flow, onOpen, onHover, onLeave, onContextMenu }: Props = $props();
 
+    const ASSET_LABEL_KEYS: Record<string, string> = {
+        image: "assetImage",
+        video: "assetVideo",
+        audio: "assetAudio",
+        pdf: "assetPdf",
+        document: "assetDocument",
+        archive: "assetArchive",
+        other: "assetOther",
+    };
+
     const from = $derived(
         flow === "out"
             ? labels.thisDoc
@@ -34,9 +44,9 @@
                 ? labels.mention
                 : item.kind === "external"
                     ? labels.external
-                    : item.kind === "asset"
-                        ? labels.asset
-                        : item.kind === "dead"
+                : item.kind === "asset"
+                    ? (labels[ASSET_LABEL_KEYS[item.assetKind || "other"]] || labels.asset)
+                    : item.kind === "dead"
                             ? labels.deadTarget
                             : labels.reference,
     );
@@ -80,6 +90,8 @@
     onkeydown={onKeyDown}
     onmouseenter={() => onHover(item)}
     onmouseleave={() => onLeave(item)}
+    onfocus={() => onHover(item)}
+    onblur={() => onLeave(item)}
     oncontextmenu={(event) => {
         event.preventDefault();
         onContextMenu(event, item);
@@ -95,6 +107,12 @@
     {/if}
     <span class="le-item__footer">
         <span class="le-item__kind">{kindLabel}</span>
+        {#if item.count && item.count > 1}
+            <span class="le-item__count">×{item.count}</span>
+        {/if}
+        {#if item.assetMissing}
+            <span class="le-item__missing">{labels.assetMissing}</span>
+        {/if}
         {#if showMeta}
             <span class="le-item__meta">{item.meta}</span>
         {/if}
@@ -203,6 +221,26 @@
     .le-item--dead .le-item__kind {
         background: color-mix(in srgb, #ef4444 18%, var(--b3-theme-surface));
         color: color-mix(in srgb, #b91c1c 55%, var(--b3-theme-on-surface));
+    }
+
+    .le-item__count {
+        flex: none;
+        padding: 0 0.385em;
+        border-radius: 0.308em;
+        background: var(--b3-theme-surface-lighter);
+        color: var(--b3-theme-on-surface);
+        font-size: 0.769em;
+        line-height: 1.231em;
+    }
+
+    .le-item__missing {
+        flex: none;
+        padding: 0 0.385em;
+        border-radius: 0.308em;
+        background: color-mix(in srgb, #ef4444 18%, var(--b3-theme-surface));
+        color: color-mix(in srgb, #b91c1c 55%, var(--b3-theme-on-surface));
+        font-size: 0.769em;
+        line-height: 1.231em;
     }
 
     .le-item__meta {

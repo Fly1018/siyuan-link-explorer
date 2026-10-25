@@ -105,6 +105,10 @@ export default class LinkExplorer extends Plugin {
     private dockObserver: IntersectionObserver | null = null;
     private pendingRefresh = false;
     private pendingTimer: ReturnType<typeof setInterval> | null = null;
+    /** Subject (doc/scope/block) whose data is currently rendered. */
+    private renderedKey = "";
+    /** Set when link data may have changed since the last successful refresh. */
+    private dirty = false;
     private isolatedSeq = 0;
     private healthSeq = 0;
     private missingAssetsAt = 0;
@@ -271,11 +275,16 @@ export default class LinkExplorer extends Plugin {
     private onProtyleEvent = (event: any) => {
         if (this.disposed) return;
         const rootID = event?.detail?.protyle?.block?.rootID || "";
-        if (rootID) {
-            if (rootID !== this.lastRootID) this.lastBlockID = "";
-            this.lastRootID = rootID;
-            this.scheduleRefresh(true);
-        }
+        if (!rootID) return;
+        // Clicking the dock icon re-emits switch-protyle for the same document;
+        // that is a focus change, not a document switch, so nothing to reload
+        // unless edits are pending.
+        const docSwitched = rootID !== this.lastRootID;
+        if (docSwitched) this.lastBlockID = "";
+        this.lastRootID = rootID;
+        if (!docSwitched && !this.dirty) return;
+        this.dirty = true;
+        this.scheduleRefresh(true);
     };
 
     private onProtyleDestroy = (event: any) => {
@@ -290,6 +299,7 @@ export default class LinkExplorer extends Plugin {
         if (stillOpen) return;
         this.lastRootID = "";
         this.lastBlockID = "";
+        this.dirty = true;
         this.scheduleRefresh(true);
     };
 
@@ -298,6 +308,7 @@ export default class LinkExplorer extends Plugin {
         if (event?.detail?.cmd !== "transactions") return;
         if (!linkSettings.autoRefresh) return;
         if (!this.currentRootID()) return;
+        this.dirty = true;
         this.scheduleRefresh(false);
     };
 
@@ -335,11 +346,33 @@ export default class LinkExplorer extends Plugin {
         }, 500);
     }
 
+    /** Identity of the subject whose links are currently rendered. */
+    private currentSubjectKey(): string {
+        const rootID = this.currentRootID();
+        const scope = linkSettings.scope;
+        const blockID = scope === "block" ? this.currentBlockID() : "";
+        return `${rootID}|${scope}|${blockID}`;
+    }
+
     private flushPendingRefresh() {
         if (this.disposed || !this.pendingRefresh) return;
         this.pendingRefresh = false;
         this.clearPendingTimer();
-        this.scheduleRefresh(true);
+        // Opening the dock must not feel like a reload: when nothing changed,
+        // keep the rendered list untouched; when the subject changed, drop the
+        // stale list immediately and query without the edit debounce.
+        const key = this.currentSubjectKey();
+        if (key === this.renderedKey && !this.dirty) return;
+        const rootID = this.currentRootID();
+        if (rootID && rootID !== linkState.docID) {
+            this.resetState();
+            linkState.loading = true;
+        }
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+        void this.refresh();
     }
 
     private clearPendingTimer() {
@@ -482,6 +515,8 @@ export default class LinkExplorer extends Plugin {
         if (this.disposed) return;
         const rootID = this.currentRootID();
         if (!rootID || !ID_RE.test(rootID)) {
+            this.renderedKey = "";
+            this.dirty = false;
             this.resetState();
             return;
         }
@@ -490,6 +525,7 @@ export default class LinkExplorer extends Plugin {
         let scope = linkSettings.scope;
         let blockID = scope === "block" ? this.currentBlockID() : "";
         const seq = ++this.refreshSeq;
+        const subjectKey = `${rootID}|${scope}|${blockID}`;
 
         if (scope === "block" && (!blockID || !ID_RE.test(blockID))) {
             scope = "doc";
@@ -499,7 +535,9 @@ export default class LinkExplorer extends Plugin {
             this.saveSettings();
         }
 
-        linkState.loading = true;
+        // Keep the current list on screen while re-querying the same subject;
+        // the loading state is only for a subject the panel has not shown yet.
+        linkState.loading = subjectKey !== this.renderedKey;
         linkState.error = "";
         linkState.scope = scope;
 
@@ -539,6 +577,8 @@ export default class LinkExplorer extends Plugin {
                 linkState.dead = [];
                 linkState.error = this.t("needBlock", "Place the caret inside a block first");
                 linkState.loading = false;
+                this.renderedKey = subjectKey;
+                this.dirty = false;
                 return;
             }
 
@@ -635,6 +675,8 @@ export default class LinkExplorer extends Plugin {
         } finally {
             if (!this.disposed && seq === this.refreshSeq) {
                 linkState.loading = false;
+                this.renderedKey = subjectKey;
+                this.dirty = false;
             }
         }
     }
